@@ -1,7 +1,7 @@
 from datetime import datetime  # the date-and-time type
 from typing import Literal  # lets us say "only these exact values are allowed"
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator  # tools for describing and validating data
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator  # tools for describing and validating data; EmailStr checks emails
 
 TaskStatus = Literal["todo", "in_progress", "done"]  # the only statuses a task can have
 STRICT = ConfigDict(extra="forbid", str_strip_whitespace=True)  # shared safety rules: reject unknown fields, trim spaces
@@ -73,3 +73,47 @@ class ClientRead(BaseModel):  # what the API SENDS BACK for a client
     notes: str | None  # notes, or None
     created_at: datetime  # when the client was added
     open_tasks: int = 0  # how many of their tasks are not done yet (calculated, not stored)
+    
+
+class PlanRequest(BaseModel):  # what the user SENDS to the AI planner
+    model_config = STRICT  # reject unknown fields; trim spaces
+
+    message: str = Field(min_length=1, max_length=4000)  # the client's message; capped so no one can send a novel and burn our AI quota
+
+
+class ProposedTask(BaseModel):  # one task the AI suggests (NOT saved yet)
+    title: str = Field(min_length=1, max_length=200)  # same limits as a real task
+    description: str | None = Field(default=None, max_length=2000)  # same limits as a real task
+    client_id: int | None = None  # which client, or None
+    source_quote: str  # the exact words from the message this task came from
+
+
+class PlanResponse(BaseModel):  # what the planner SENDS BACK
+    tasks: list[ProposedTask]  # the suggestions that passed our checks
+    dropped: int  # how many of the AI's suggestions we threw away because they failed our checks
+
+
+class ApproveRequest(BaseModel):  # what the user SENDS to save the tasks they chose
+    model_config = STRICT  # reject unknown fields
+
+    tasks: list[TaskCreate] = Field(min_length=1, max_length=10)  # 1 to 10 tasks, each checked like a normal new task
+    
+
+class UserCreate(BaseModel):  # what someone SENDS to register
+    model_config = STRICT  # reject unknown fields; trim spaces
+
+    email: EmailStr  # must look like a real email address
+    password: str = Field(min_length=8, max_length=128)  # at least 8 characters; capped so no one can send a 10 MB "password" to slow the server
+
+
+class UserRead(BaseModel):  # what the API SENDS BACK about a user (never the password or its hash)
+    model_config = ConfigDict(from_attributes=True)  # allow building this from a database row
+
+    id: int  # the user's number
+    email: str  # their email
+    created_at: datetime  # when they registered
+
+
+class Token(BaseModel):  # what /auth/login SENDS BACK
+    access_token: str  # the signed login token
+    token_type: str = "bearer"  # tells the client to send it as "Authorization: Bearer <token>"
