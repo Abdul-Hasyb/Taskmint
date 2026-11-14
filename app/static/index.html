@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">  <!-- letters like Urdu and emoji show correctly -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">  <!-- fits phone screens too -->
+  <title>Taskmint</title>  <!-- the browser tab's name -->
+  <style>
+    /* ---------- colours and basics ---------- */
+    :root { --bg: #0f1714; --card: #17221e; --line: #263530; --text: #e8f1ed; --muted: #8fa59c; --mint: #3ddc97; --red: #ff6b6b; }
+    * { box-sizing: border-box; }  /* widths include padding, so things line up */
+    body { margin: 0; font-family: system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    main { max-width: 980px; margin: 0 auto; padding: 20px; }  /* centre the page, not too wide */
+    h1, h2 { margin: 0 0 12px; }
+    h2 { font-size: 17px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .hidden { display: none !important; }  /* used to show/hide whole sections */
+
+    /* ---------- top bar ---------- */
+    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+    .logo { font-size: 24px; font-weight: 700; }
+    .logo span { color: var(--mint); }
+    .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 13px; color: var(--muted); }
+
+    /* ---------- cards, inputs, buttons ---------- */
+    .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }  /* two columns on a laptop */
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }  /* one column on a phone */
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+    input, textarea, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px; font: inherit; }
+    textarea { min-height: 110px; resize: vertical; }
+    button { background: var(--mint); color: #062015; border: 0; border-radius: 8px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; }
+    button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    button.danger { background: transparent; color: var(--red); border: 1px solid var(--line); padding: 4px 9px; }
+    button:disabled { opacity: .5; cursor: wait; }
+    .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+    .row > input { flex: 1; }
+
+    /* ---------- lists ---------- */
+    .item { border-top: 1px solid var(--line); padding: 10px 0; display: flex; gap: 10px; align-items: flex-start; }
+    .item:first-child { border-top: 0; }
+    .item .grow { flex: 1; min-width: 0; }
+    .item select { width: auto; padding: 4px; }
+    .item input[type=checkbox] { width: auto; margin-top: 4px; }
+    .quote { color: var(--muted); font-size: 13px; font-style: italic; margin-top: 3px; }  /* the client's exact words */
+    .tag { font-size: 12px; color: var(--mint); }
+    .done { text-decoration: line-through; color: var(--muted); }
+
+    /* ---------- messages ---------- */
+    #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--card); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; }
+    #toast.error { border-color: var(--red); color: var(--red); }
+    .auth { max-width: 380px; margin: 60px auto; }
+    .auth input { margin-top: 10px; }
+  </style>
+</head>
+<body>
+<main>
+
+  <!-- ============ LOGIN / SIGN UP (shown when logged out) ============ -->
+  <section id="auth-view" class="card auth">
+    <div class="logo">Task<span>mint</span></div>  <!-- the logo -->
+    <p class="muted">Paste client messages. Get tasks. Approve what's right.</p>
+    <form id="auth-form">  <!-- a form, so Enter submits it -->
+      <input id="email" type="email" placeholder="Email" autocomplete="email" required maxlength="254">
+      <input id="password" type="password" placeholder="Password (8+ characters)" autocomplete="current-password" required minlength="8" maxlength="128">
+      <div class="row">
+        <button type="submit">Log in</button>  <!-- Enter or click = log in -->
+        <button type="button" class="ghost" id="register-btn">Create account</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ============ THE DASHBOARD (shown when logged in) ============ -->
+  <section id="app-view" class="hidden">
+    <header>
+      <div class="logo">Task<span>mint</span></div>
+      <div class="row" style="margin:0">
+        <span class="pill" id="usage">AI: …</span>  <!-- "AI: 17 of 20 left today" -->
+        <span class="pill" id="who"></span>  <!-- the logged-in email -->
+        <button class="ghost" id="logout-btn">Log out</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div>
+        <!-- ---- the AI planner ---- -->
+        <div class="card">
+          <h2>✨ Paste a client message</h2>
+          <textarea id="message" maxlength="4000" placeholder="Bilal here, kal tak 60 sec reel bhej dena aur thumbnail bhi"></textarea>
+          <div class="row">
+            <button id="propose-btn">Suggest tasks</button>
+            <span class="muted" id="propose-info"></span>  <!-- e.g. "1 suggestion dropped" -->
+          </div>
+          <div id="proposals"></div>  <!-- suggested tasks appear here -->
+          <div class="row hidden" id="approve-row">
+            <button id="approve-btn">Save selected tasks</button>
+            <button class="ghost" id="discard-btn">Discard</button>
+          </div>
+        </div>
+
+        <!-- ---- my tasks ---- -->
+        <div class="card">
+          <div class="row" style="margin-top:0">
+            <h2 style="flex:1;margin:0">✅ My tasks</h2>
+            <select id="status-filter" style="width:auto">  <!-- filter the list -->
+              <option value="">All</option>
+              <option value="todo">To do</option>
+              <option value="in_progress">In progress</option>
+              <option value="done">Done</option>
+            </select>
+          </div>
+          <form class="row" id="task-form">  <!-- add a task by hand -->
+            <input id="task-title" placeholder="Add a task by hand" maxlength="200" required>
+            <button type="submit">Add</button>
+          </form>
+          <div id="tasks"></div>
+        </div>
+      </div>
+
+      <!-- ---- my clients ---- -->
+      <div class="card">
+        <h2>👥 Clients</h2>
+        <form class="row" id="client-form" style="margin-top:0">
+          <input id="client-name" placeholder="New client name" maxlength="100" required>
+          <button type="submit">Add</button>
+        </form>
+        <div id="clients"></div>
+      </div>
+    </div>
+  </section>
+</main>
+<div id="toast" class="hidden"></div>  <!-- small pop-up messages -->
+
+<script>
+// ===================================================================
+// Taskmint dashboard. It only talks to our own API (the same /tasks,
+// /clients, /planner and /auth endpoints we tested in /docs).
+// SAFETY RULE: text from users or the AI is ONLY ever put on the page
+// with textContent, never innerHTML, so nobody can inject HTML/scripts.
+// ===================================================================
+
+const $ = (id) => document.getElementById(id);  // shortcut: $("tasks") = the element with id="tasks"
+let token = sessionStorage.getItem("taskmint_token");  // the login wristband; sessionStorage = forgotten when the tab closes
+let clients = [];  // my clients, kept here so tasks can show the client's name
+let proposals = [];  // the AI's latest suggestions
+
+// ---------- small helpers ----------
+
+function el(tag, props = {}, ...children) {  // build an element safely: el("div", {className: "item"}, "text")
+  const node = document.createElement(tag);  // the new element
+  Object.assign(node, props);  // set its properties (className, onclick, value...)
+  for (const child of children) node.append(child);  // strings become TEXT, never HTML
+  return node;
+}
+
+function toast(text, isError = false) {  // show a short message at the bottom
+  const box = $("toast");
+  box.textContent = text;  // safe: plain text
+  box.className = isError ? "error" : "";  // red border for errors
+  clearTimeout(toast.timer);  // restart the timer if one is running
+  toast.timer = setTimeout(() => box.classList.add("hidden"), 3500);  // hide after 3.5 s
+}
+
+function errorText(data) {  // turn the API's error into one readable line
+  if (!data || !data.detail) return "Something went wrong. Try again.";
+  if (typeof data.detail === "string") return data.detail;  // e.g. "Daily AI limit reached (20 per day)..."
+  return data.detail.map((d) => d.msg).join(", ");  // 422 from Pydantic: a list of problems
+}
+
+async function api(path, options = {}) {  // every call to our API goes through here
+  const headers = options.headers || {};
+  if (token) headers.Authorization = "Bearer " + token;  // show the wristband
+  if (options.json !== undefined) {  // sending JSON?
+    headers["Content-Type"] = "application/json";
+    options.body = JSON.stringify(options.json);  // {title: "x"} -> '{"title":"x"}'
+  }
+  const response = await fetch(path, { ...options, headers });  // send it
+  if (response.status === 401 && token) {  // wristband expired or fake
+    logout();  // back to the login screen
+    throw new Error("Your session ended. Please log in again.");
+  }
+  if (response.status === 204) return null;  // deleted: nothing to read
+  const data = await response.json().catch(() => null);  // read the JSON answer (null if none)
+  if (!response.ok) throw new Error(errorText(data));  // 4xx/5xx -> an error with the API's message
+  return data;
+}
+
+async function run(button, work) {  // disable a button while it works, show errors as a toast
+  if (button) button.disabled = true;  // stops double clicks (and double AI credits)
+  try { await work(); }
+  catch (error) { toast(error.message, true); }  // e.g. "Client 5 does not exist"
+  finally { if (button) button.disabled = false; }
+}
+
+// ---------- logging in and out ----------
+
+async function login(email, password) {
+  const form = new URLSearchParams({ username: email, password });  // /auth/login wants a FORM (username = email), like /docs Authorize
+  const data = await api("/auth/login", { method: "POST", body: form });
+  token = data.access_token;  // keep the wristband
+  sessionStorage.setItem("taskmint_token", token);  // survives a page refresh, not closing the tab
+  await start();
+}
+
+function logout() {
+  token = null;  // forget the wristband
+  sessionStorage.removeItem("taskmint_token");
+  $("app-view").classList.add("hidden");  // hide the dashboard
+  $("auth-view").classList.remove("hidden");  // show the login form
+}
+
+$("auth-form").onsubmit = (event) => {  // "Log in" clicked (or Enter)
+  event.preventDefault();  // don't reload the page
+  run(event.submitter, () => login($("email").value.trim(), $("password").value));
+};
+
+$("register-btn").onclick = (event) => run(event.target, async () => {  // "Create account"
+  if (!$("auth-form").reportValidity()) return;  // let the browser point at an empty/short field
+  const email = $("email").value.trim();
+  await api("/auth/register", { method: "POST", json: { email, password: $("password").value } });  // make the account
+  await login(email, $("password").value);  // then log straight in
+  toast("Account created. Welcome!");
+});
+
+$("logout-btn").onclick = logout;
+
+// ---------- loading data ----------
+
+async function start() {  // after login (or on refresh with a saved token)
+  const me = await api("/auth/me");  // who am I? (also checks the token still works)
+  $("who").textContent = me.email;
+  $("auth-view").classList.add("hidden");
+  $("app-view").classList.remove("hidden");
+  await Promise.all([loadClients(), loadUsage()]);  // clients first (tasks show client names)...
+  await loadTasks();  // ...then tasks
+}
+
+async function loadUsage() {
+  const u = await api("/planner/usage");  // {"used": 3, "limit": 20, "remaining": 17}
+  $("usage").textContent = `AI: ${u.remaining} of ${u.limit} left today`;
+}
+
+function clientName(id) {  // client id -> "Bilal" (or "" if none)
+  const found = clients.find((c) => c.id === id);
+  return found ? found.name : "";
+}
+
+// ---------- clients ----------
+
+async function loadClients() {
+  clients = await api("/clients");  // only MY clients (the API makes sure)
+  const list = $("clients");
+  list.replaceChildren();  // clear the old list
+  if (!clients.length) list.append(el("p", { className: "muted" }, "No clients yet. Add one, and the AI will match messages to them by name."));
+  for (const c of clients) {
+    list.append(el("div", { className: "item" },
+      el("div", { className: "grow" }, c.name, el("div", { className: "muted" }, `${c.open_tasks} open task${c.open_tasks === 1 ? "" : "s"}`)),
+      el("button", { className: "danger", title: "Delete client (tasks are kept)", onclick: (e) => run(e.target, async () => {
+        if (!confirm(`Delete ${c.name}? Their tasks are kept.`)) return;  // ask first
+        await api(`/clients/${c.id}`, { method: "DELETE" });
+        await loadClients(); await loadTasks();  // refresh both lists
+      }) }, "✕")));
+  }
+}
+
+$("client-form").onsubmit = (event) => {
+  event.preventDefault();
+  run(event.submitter, async () => {
+    await api("/clients", { method: "POST", json: { name: $("client-name").value } });
+    $("client-name").value = "";  // empty the box
+    await loadClients();
+  });
+};
+
+// ---------- tasks ----------
+
+async function loadTasks() {
+  const status = $("status-filter").value;  // "" = all
+  const tasks = await api("/tasks" + (status ? `?status=${status}` : ""));  // only MY tasks
+  const list = $("tasks");
+  list.replaceChildren();
+  if (!tasks.length) list.append(el("p", { className: "muted" }, "No tasks here yet."));
+  for (const t of tasks) {
+    const picker = el("select", { onchange: () => run(picker, async () => {  // change status
+      await api(`/tasks/${t.id}`, { method: "PATCH", json: { status: picker.value } });
+      await loadTasks(); await loadClients();  // open-task counts change too
+    }) });
+    for (const [value, label] of [["todo", "To do"], ["in_progress", "In progress"], ["done", "Done"]]) {
+      picker.append(el("option", { value, selected: t.status === value }, label));
+    }
+    list.append(el("div", { className: "item" },
+      el("div", { className: "grow" },
+        el("div", { className: t.status === "done" ? "done" : "" }, t.title),
+        t.description ? el("div", { className: "muted" }, t.description) : "",
+        t.client_id ? el("div", { className: "tag" }, "👤 " + clientName(t.client_id)) : ""),
+      picker,
+      el("button", { className: "danger", title: "Delete task", onclick: (e) => run(e.target, async () => {
+        await api(`/tasks/${t.id}`, { method: "DELETE" });
+        await loadTasks(); await loadClients();
+      }) }, "✕")));
+  }
+}
+
+$("status-filter").onchange = () => run(null, loadTasks);
+
+$("task-form").onsubmit = (event) => {  // add a task by hand
+  event.preventDefault();
+  run(event.submitter, async () => {
+    await api("/tasks", { method: "POST", json: { title: $("task-title").value } });
+    $("task-title").value = "";
+    await loadTasks(); await loadClients();
+  });
+};
+
+// ---------- the AI planner ----------
+
+function showProposals() {  // draw the AI's suggestions with tick boxes
+  const list = $("proposals");
+  list.replaceChildren();
+  proposals.forEach((p, i) => {
+    list.append(el("label", { className: "item" },
+      el("input", { type: "checkbox", checked: true, onchange: (e) => { p.keep = e.target.checked; } }),  // ticked by default
+      el("div", { className: "grow" },
+        el("div", {}, p.title),
+        p.description ? el("div", { className: "muted" }, p.description) : "",
+        el("div", { className: "quote" }, `“${p.source_quote}”`),  // the client's exact words: the proof
+        p.client_id ? el("div", { className: "tag" }, "👤 " + clientName(p.client_id)) : "")));
+  });
+  $("approve-row").classList.toggle("hidden", !proposals.length);  // only show Save when there's something
+}
+
+$("propose-btn").onclick = (event) => run(event.target, async () => {
+  const message = $("message").value.trim();
+  if (!message) { toast("Paste a message first.", true); return; }  // don't waste an AI credit
+  $("propose-info").textContent = "Thinking…";
+  try {
+    const plan = await api("/planner/propose", { method: "POST", json: { message } });  // uses 1 AI credit
+    proposals = plan.tasks.map((t) => ({ ...t, keep: true }));
+    $("propose-info").textContent = proposals.length ? (plan.dropped ? `${plan.dropped} made-up suggestion(s) removed` : "") : "No tasks found in this message.";
+    showProposals();
+  } finally {
+    await loadUsage().catch(() => {});  // credit count changed (even if the AI failed)
+    if ($("propose-info").textContent === "Thinking…") $("propose-info").textContent = "";
+  }
+});
+
+$("approve-btn").onclick = (event) => run(event.target, async () => {
+  const chosen = proposals.filter((p) => p.keep).map(({ title, description, client_id }) => ({ title, description, client_id }));  // only the fields approve accepts
+  if (!chosen.length) { toast("Tick at least one task.", true); return; }
+  await api("/planner/approve", { method: "POST", json: { tasks: chosen } });  // all or nothing
+  toast(`Saved ${chosen.length} task${chosen.length === 1 ? "" : "s"}.`);
+  proposals = []; showProposals(); $("message").value = ""; $("propose-info").textContent = "";
+  await loadTasks(); await loadClients();
+});
+
+$("discard-btn").onclick = () => { proposals = []; showProposals(); $("propose-info").textContent = ""; };
+
+// ---------- go ----------
+if (token) run(null, start);  // a saved token from this tab? try it (logs out if it expired)
+</script>
+</body>
+</html>
