@@ -1,4 +1,4 @@
-from datetime import datetime  # the date-and-time type
+from datetime import date, datetime, time  # date = a day, datetime = a moment, time = a clock time
 from typing import Literal  # lets us say "only these exact values are allowed"
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator  # tools for describing and validating data; EmailStr checks emails
@@ -12,7 +12,16 @@ class TaskCreate(BaseModel):  # what the user must SEND to create a task
 
     title: str = Field(min_length=1, max_length=200)  # required; 1 to 200 characters
     description: str | None = Field(default=None, max_length=2000)  # optional; at most 2000 characters
-    client_id: int | None = None  # optional: which client this task is for
+    client_id: int | None = None  # optional: who this task is FROM or about (e.g. the client who asked)
+    assignee_id: int | None = None  # optional: who DOES it (someone on my People list); None = me
+    due_date: date | None = None  # optional: the day it's due, e.g. "2026-11-16"
+    due_time: time | None = None  # optional: the time it's due, e.g. "20:00" (needs a due_date)
+
+    @model_validator(mode="after")  # runs after the fields above are checked
+    def time_needs_a_day(self) -> "TaskCreate":  # "8 PM" alone makes no sense without a day
+        if self.due_time is not None and self.due_date is None:  # a time but no day?
+            raise ValueError("due_time needs a due_date")  # reject with 422
+        return self  # all good
 
 
 class TaskUpdate(BaseModel):  # what the user may SEND to change a task; every field is optional
@@ -22,6 +31,9 @@ class TaskUpdate(BaseModel):  # what the user may SEND to change a task; every f
     description: str | None = Field(default=None, max_length=2000)  # new description, if changing it
     status: TaskStatus | None = None  # new status, if changing it
     client_id: int | None = None  # move the task to another client, or null to remove the client
+    assignee_id: int | None = None  # give it to someone else, or null to take it back myself
+    due_date: date | None = None  # a new due day, or null to remove it (also removes the time)
+    due_time: time | None = None  # a new due time, or null for "sometime that day"
 
     @model_validator(mode="after")  # runs after the fields above are checked
     def at_least_one_field(self) -> "TaskUpdate":  # make sure the update actually changes something
@@ -41,6 +53,10 @@ class TaskRead(BaseModel):  # what the API SENDS BACK for a task
     status: TaskStatus  # one of: todo, in_progress, done
     created_at: datetime  # when the task was created
     client_id: int | None  # the client's id, or None if the task has no client
+    assignee_id: int | None  # who does it, or None = me
+    completed_at: datetime | None  # when it was ticked done, or None
+    due_date: date | None  # the day it's due, or None
+    due_time: time | None  # the time it's due, or None
 
 
 class ClientCreate(BaseModel):  # what the user must SEND to create a client
@@ -73,7 +89,7 @@ class ClientRead(BaseModel):  # what the API SENDS BACK for a client
     notes: str | None  # notes, or None
     created_at: datetime  # when the client was added
     open_tasks: int = 0  # how many of their tasks are not done yet (calculated, not stored)
-    
+
 
 class PlanRequest(BaseModel):  # what the user SENDS to the AI planner
     model_config = STRICT  # reject unknown fields; trim spaces
@@ -85,6 +101,9 @@ class ProposedTask(BaseModel):  # one task the AI suggests (NOT saved yet)
     title: str = Field(min_length=1, max_length=200)  # same limits as a real task
     description: str | None = Field(default=None, max_length=2000)  # same limits as a real task
     client_id: int | None = None  # which client, or None
+    assignee_id: int | None = None  # who should do it, or None = me
+    due_date: date | None = None  # the day the AI worked out ("kal" -> tomorrow), or None
+    due_time: time | None = None  # the time the AI worked out ("8 baje" -> 20:00), or None
     source_quote: str  # the exact words from the message this task came from
 
 
@@ -97,7 +116,7 @@ class ApproveRequest(BaseModel):  # what the user SENDS to save the tasks they c
     model_config = STRICT  # reject unknown fields
 
     tasks: list[TaskCreate] = Field(min_length=1, max_length=10)  # 1 to 10 tasks, each checked like a normal new task
-    
+
 
 class UserCreate(BaseModel):  # what someone SENDS to register
     model_config = STRICT  # reject unknown fields; trim spaces

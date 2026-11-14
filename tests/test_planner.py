@@ -83,3 +83,9 @@ def test_rejects_huge_message(client: TestClient) -> None:  # stops someone burn
 def test_rejects_too_many_tasks_on_approve(client: TestClient) -> None:  # stops someone saving hundreds of tasks in one go
     tasks = [{"title": f"Task {n}"} for n in range(11)]  # 11 tasks
     assert client.post("/planner/approve", json={"tasks": tasks}).status_code == 422  # max is 10
+
+def test_quote_with_different_punctuation_is_kept(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:  # "ha ,or" vs "ha, or" is the same words
+    fake_ai(monkeypatch, AITask(title="Go to the gym", description=None, client_id=None, source_quote="utna ha, or gym jana ha"))  # AI "fixed" the comma
+    body = client.post("/planner/propose", json={"message": "kal do kam karanay ha time say utna ha ,or gym jana ha"}).json()
+    assert [t["title"] for t in body["tasks"]] == ["Go to the gym"]  # kept: only punctuation differed
+    assert body["dropped"] == 0

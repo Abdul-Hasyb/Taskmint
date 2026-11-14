@@ -1,6 +1,6 @@
-from datetime import date, datetime, timezone  # tools for working with dates and times (date = just a day, no time)
+from datetime import date, datetime, time, timezone  # tools for dates and times (date = just a day; time = just a clock time)
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, UniqueConstraint  # column types; ForeignKey = "points at another table"; UniqueConstraint = "no two rows with the same values"
+from sqlalchemy import Date, DateTime, ForeignKey, String, Time, UniqueConstraint  # column types; ForeignKey = "points at another table"; UniqueConstraint = "no two rows with the same values"
 from sqlalchemy.orm import Mapped, mapped_column  # tools for describing a table's columns
 
 from app.database import Base  # the parent class every table inherits from
@@ -42,6 +42,10 @@ class Task(Base):  # one row in the "tasks" table = one task
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)  # set automatically on insert
     client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), index=True)  # which client this task is for (optional)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # whose task this is (required)
+    assignee_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), nullable=True, index=True)  # WHO does it (a person from my People list), or None = me
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # when it was ticked done (for the charts), or None
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)  # the day it's due (users' local day), or None
+    due_time: Mapped[time | None] = mapped_column(Time, nullable=True)  # the clock time it's due, or None = "sometime that day"
 
 
 class AIUsage(Base):  # one row in the "ai_usage" table = how many AI requests one user made on one day

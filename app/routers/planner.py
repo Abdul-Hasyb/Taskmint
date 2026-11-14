@@ -1,5 +1,5 @@
 import os  # read settings from the environment (.env)
-from datetime import datetime, timezone  # to know what day it is (UTC)
+from datetime import date, datetime, time, timezone  # days, clock times, and what day it is (UTC)
 
 from fastapi import APIRouter, Depends, HTTPException, status  # APIRouter = a group of related endpoints
 from pydantic import ValidationError  # raised when data doesn't match a model
@@ -7,6 +7,7 @@ from sqlalchemy import select  # builds SELECT queries
 from sqlalchemy.orm import Session  # the type of a database conversation
 
 from app import ai  # our Gemini helper (used as ai.ask_ai, so tests can swap it for a fake)
+from app.clock import local_today  # today on the users' clock
 from app.database import get_db  # hands each request its own database session
 from app.models import AIUsage, Client, Task, User  # the AI-usage, clients, tasks and users TABLES
 from app.routers.tasks import check_client_exists  # reuse: a task can only point at a real client
@@ -40,8 +41,23 @@ def usage(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     return {"used": used, "limit": AI_DAILY_LIMIT, "remaining": max(AI_DAILY_LIMIT - used, 0)}  # e.g. {"used": 3, "limit": 20, "remaining": 17}
 
 
-def normalise(text: str) -> str:  # make text easy to compare: lowercase, single spaces
-    return " ".join(text.lower().split())  # "  Kal  TAK " -> "kal tak"
+def parse_due(raw_date: str | None, raw_time: str | None) -> tuple[date | None, time | None]:  # turn the AI's text into a real day and time
+    try:  # the AI might send something odd like "kal" or "25:99"
+        due_date = date.fromisoformat(raw_date) if raw_date else None  # "2026-11-16" -> a date
+    except ValueError:  # not a real date
+        due_date = None  # ignore it rather than crash
+    try:
+        due_time = time.fromisoformat(raw_time) if raw_time else None  # "20:00" -> a time
+    except ValueError:  # not a real time
+        due_time = None
+    if due_time is not None and due_date is None:  # a time but no day ("8 baje")
+        due_date = local_today()  # assume today
+    return due_date, due_time  # e.g. (2026-11-16, 20:00)
+
+
+def normalise(text: str) -> str:  # make text easy to compare: lowercase, no punctuation, single spaces
+    letters = "".join(ch if ch.isalnum() else " " for ch in text.lower())  # every comma, dot, "?" etc. becomes a space
+    return " ".join(letters.split())  # "ha ,or  Gym!" -> "ha or gym"
 
 
 @router.post("/propose")  # POST /planner/propose: message in, suggested tasks out, NOTHING saved
@@ -51,7 +67,7 @@ def propose(request: PlanRequest, db: Session = Depends(get_db), user: User = De
     use_ai_credit(db, user)  # count this request (429 if today's limit is used up)
     try:  # the AI might be down or out of quota
         plan = ai.ask_ai(request.message, [(cid, name) for cid, name in clients])  # ask Gemini
-    except ai.PlannerRateLimited:  # free quota used up
+    except ai.PlannerRateLimited:  # Google's free quota used up
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="AI limit reached. Try again in a minute.")
     except ai.PlannerUnavailable:  # no key, no internet, or Gemini error
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI planner is unavailable right now.")
@@ -61,11 +77,15 @@ def propose(request: PlanRequest, db: Session = Depends(get_db), user: User = De
     for item in plan.tasks[:10]:  # never more than 10, whatever the AI says
         if not item.source_quote.strip() or normalise(item.source_quote) not in message:  # quote missing, or not really in the message?
             continue  # the AI made it up: drop it
+        due_date, due_time = parse_due(item.due_date, item.due_time)  # "2026-11-16", "20:00" -> real date and time (or None)
         try:  # check it like a normal task (title length etc.)
             proposals.append(ProposedTask(  # build a checked suggestion
+                due_date=due_date,  # the day it's due, or None
+                due_time=due_time,  # the time it's due, or None
                 title=item.title.strip(),  # trimmed title
                 description=item.description,  # details
                 client_id=item.client_id if item.client_id in known_ids else None,  # only a client that really exists
+                assignee_id=item.assignee_id if item.assignee_id in known_ids else None,  # only someone really on MY People list
                 source_quote=item.source_quote.strip(),  # the proof
             ))
         except ValidationError:  # e.g. an empty or 500-character title
@@ -77,9 +97,10 @@ def propose(request: PlanRequest, db: Session = Depends(get_db), user: User = De
 def approve(request: ApproveRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[TaskRead]:  # login required
     for task_in in request.tasks:  # check EVERY task first...
         check_client_exists(db, task_in.client_id, user)  # ...so one bad (or someone else's) client stops the whole batch
-    tasks = [Task(title=t.title, description=t.description, client_id=t.client_id, user_id=user.id) for t in request.tasks]  # the new rows, owned by this user
+        check_client_exists(db, task_in.assignee_id, user)  # same for the person doing it
+    tasks = [Task(**t.model_dump(), user_id=user.id) for t in request.tasks]  # the new rows (with due dates), owned by this user
     db.add_all(tasks)  # all of them into the "to save" pile
     db.commit()  # save them together: all or nothing
     for task in tasks:  # reload each one...
         db.refresh(task)  # ...to get its id and created_at
-    return [TaskRead.model_validate(task) for task in tasks]  # send them back
+    return [TaskRead.model_validate(task) for task in tasks]  # send them back

@@ -69,5 +69,6 @@ def update_client(client_id: int, changes: ClientUpdate, db: Session = Depends(g
 def delete_client(client_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> None:
     client = find_client_or_404(db, client_id, user)  # find it (or 404)
     db.execute(update(Task).where(Task.client_id == client_id).values(client_id=None))  # unlink their tasks first (tasks are kept)
+    db.execute(update(Task).where(Task.assignee_id == client_id).values(assignee_id=None))  # tasks they were doing come back to me
     db.delete(client)  # then delete the client
     db.commit()  # both changes saved together

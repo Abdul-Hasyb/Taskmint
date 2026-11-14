@@ -5,353 +5,1288 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">  <!-- fits phone screens too -->
   <title>Taskmint</title>  <!-- the browser tab's name -->
   <style>
-    /* ---------- colours and basics ---------- */
-    :root { --bg: #0f1714; --card: #17221e; --line: #263530; --text: #e8f1ed; --muted: #8fa59c; --mint: #3ddc97; --red: #ff6b6b; }
+    /* ================= colours and basics ================= */
+    :root {
+      --bg: #0c1311; --panel: #111a17; --card: #141f1b; --line: #22312c; --hover: #1a2924;
+      --text: #e9f2ee; --muted: #8ea39a; --mint: #3ddc97; --mint-dim: #1f4d3a;
+      --blue: #6b8af0; --amber: #f5b94a; --red: #ff6b6b; --purple: #a98bf5;
+    }
     * { box-sizing: border-box; }  /* widths include padding, so things line up */
-    body { margin: 0; font-family: system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
-    main { max-width: 980px; margin: 0 auto; padding: 20px; }  /* centre the page, not too wide */
-    h1, h2 { margin: 0 0 12px; }
-    h2 { font-size: 17px; }
-    .muted { color: var(--muted); font-size: 13px; }
-    .hidden { display: none !important; }  /* used to show/hide whole sections */
+    html { background: var(--bg); }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; color: var(--text); min-height: 100vh; }
+    button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
+    input, textarea { font: inherit; color: var(--text); }
+    .muted { color: var(--muted); }
+    .hidden { display: none !important; }  /* hide whole sections */
+    svg.icon { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-    /* ---------- top bar ---------- */
-    header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
-    .logo { font-size: 24px; font-weight: 700; }
-    .logo span { color: var(--mint); }
-    .pill { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 13px; color: var(--muted); }
+    /* ================= layout: sidebar + main ================= */
+    .shell { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+    aside { background: var(--panel); border-right: 1px solid var(--line); padding: 26px 18px; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; height: 100vh; }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 26px; font-weight: 700; margin: 0 6px 26px; }
+    .brand span { color: var(--mint); }
+    .nav { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: 12px; color: #cfdcd6; text-align: left; width: 100%; }
+    .nav:hover { background: var(--hover); }
+    .nav.active { background: linear-gradient(90deg, #1d3a2f, #17302a); color: #fff; font-weight: 600; }
+    .nav.active svg { stroke: var(--mint); }
+    .promo { margin-top: auto; border: 1px solid var(--line); border-radius: 16px; padding: 18px; background: linear-gradient(160deg, #15241f, #0f1714); position: relative; overflow: hidden; font-size: 14px; line-height: 1.5; }
+    .promo svg.leaf { position: absolute; right: -10px; bottom: -14px; width: 110px; height: 110px; opacity: .55; }
+    .me { display: flex; align-items: center; gap: 12px; padding: 14px 8px 0; width: 100%; text-align: left; }
+    .avatar { width: 40px; height: 40px; border-radius: 50%; background: #23302c; display: grid; place-items: center; font-weight: 700; flex: none; }
+    main { padding: 30px 36px; max-width: 1280px; width: 100%; }
 
-    /* ---------- cards, inputs, buttons ---------- */
-    .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; }  /* two columns on a laptop */
-    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }  /* one column on a phone */
-    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
-    input, textarea, select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 9px; font: inherit; }
-    textarea { min-height: 110px; resize: vertical; }
-    button { background: var(--mint); color: #062015; border: 0; border-radius: 8px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; }
-    button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
-    button.danger { background: transparent; color: var(--red); border: 1px solid var(--line); padding: 4px 9px; }
-    button:disabled { opacity: .5; cursor: wait; }
-    .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-    .row > input { flex: 1; }
+    /* ================= top of the page ================= */
+    .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+    h1 { font-size: 34px; margin: 0 0 8px; }
+    .lead { color: #c4d2cc; font-size: 17px; max-width: 620px; margin: 0 0 24px; line-height: 1.5; }
+    .datepill { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 16px; white-space: nowrap; }
+    .home { display: grid; grid-template-columns: 1fr 400px; gap: 28px; }
 
-    /* ---------- lists ---------- */
-    .item { border-top: 1px solid var(--line); padding: 10px 0; display: flex; gap: 10px; align-items: flex-start; }
-    .item:first-child { border-top: 0; }
-    .item .grow { flex: 1; min-width: 0; }
-    .item select { width: auto; padding: 4px; }
-    .item input[type=checkbox] { width: auto; margin-top: 4px; }
-    .quote { color: var(--muted); font-size: 13px; font-style: italic; margin-top: 3px; }  /* the client's exact words */
-    .tag { font-size: 12px; color: var(--mint); }
-    .done { text-decoration: line-through; color: var(--muted); }
+    /* ================= cards ================= */
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px; margin-bottom: 24px; }
+    .card h2 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 12px; }
+    .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .count { font-size: 14px; background: #1f2b27; border-radius: 99px; padding: 5px 12px; font-weight: 500; }
+    .link { color: var(--mint); font-weight: 600; margin-left: auto; }
 
-    /* ---------- messages ---------- */
-    #toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--card); border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; }
+    /* ---- the AI box ---- */
+    .ask { border-color: #23594a; background: linear-gradient(180deg, #13261f, #12201c); }
+    .ask-box { display: flex; align-items: flex-start; gap: 12px; background: #0f1a17; border: 1px solid var(--line); border-radius: 16px; padding: 14px 14px 14px 18px; }
+    .ask-box textarea { flex: 1; background: none; border: 0; outline: none; resize: none; font-size: 17px; min-height: 28px; max-height: 200px; padding-top: 6px; }
+    .send { width: 46px; height: 46px; border-radius: 50%; background: var(--mint); display: grid; place-items: center; flex: none; }
+    .send svg { stroke: #062015; }
+    .send:disabled { opacity: .5; cursor: wait; }
+    .chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .chip { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 99px; padding: 8px 14px; font-size: 14px; color: #cfdcd6; }
+    .chip:hover { border-color: var(--mint-dim); background: var(--hover); }
+    .info { font-size: 14px; color: var(--muted); margin-top: 12px; min-height: 1px; }
+    .btn { background: var(--mint); color: #062015; font-weight: 600; border-radius: 10px; padding: 10px 16px; }
+    .btn.ghost { background: none; color: var(--text); border: 1px solid var(--line); }
+    .btn:disabled { opacity: .5; cursor: wait; }
+
+    /* ---- task rows ---- */
+    .task { display: flex; align-items: center; gap: 16px; padding: 18px 4px; border-top: 1px solid var(--line); position: relative; }
+    .task:first-of-type { border-top: 0; }
+    .tick { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #8ea39a; display: grid; place-items: center; flex: none; }
+    .tick:hover { border-color: var(--mint); }
+    .task.is-done .tick { background: var(--mint); border-color: var(--mint); }
+    .task.is-done .tick svg { stroke: #062015; }
+    .task.is-done .title { text-decoration: line-through; color: var(--muted); }
+    .task .body { flex: 1; min-width: 0; }
+    .title { font-size: 17px; }
+    .meta { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; margin-top: 4px; flex-wrap: wrap; }
+    .meta svg.icon { width: 15px; height: 15px; }
+    .quote { color: var(--muted); font-style: italic; font-size: 14px; margin-top: 4px; }
+    .tag { font-size: 14px; padding: 6px 14px; border-radius: 99px; white-space: nowrap; }
+    .dots { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); }
+    .dots:hover { background: var(--hover); }
+    .menu { position: absolute; right: 0; top: 54px; z-index: 5; background: #1a2622; border: 1px solid var(--line); border-radius: 12px; padding: 6px; min-width: 180px; box-shadow: 0 12px 30px #0008; }
+    .menu button { display: block; width: 100%; text-align: left; padding: 9px 12px; border-radius: 8px; }
+    .menu button:hover { background: var(--hover); }
+    .menu .danger { color: var(--red); }
+    .add-row { display: flex; gap: 10px; margin: 6px 0 4px; }
+    .field { flex: 1; background: #0f1a17; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; outline: none; }
+    .field:focus { border-color: var(--mint-dim); }
+    .badge-doing { color: var(--amber); }
+    .pick { background: #0f1a17; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; color: var(--text); font: inherit; }
+    .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px; }
+    .person { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
+    .person-top { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+    .person-top .avatar { width: 48px; height: 48px; font-size: 20px; background: #1d3a2f; color: var(--mint); }
+    .person-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .stat-chip { font-size: 13px; padding: 4px 10px; border-radius: 99px; background: #1f2b27; }
+    .stat-chip.red { background: #3a1d1d; color: var(--red); }
+    .stat-chip.green { background: #173d2c; color: var(--mint); }
+    .mini-task { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+    .overdue { color: var(--red) !important; }  /* past its due time and not done */
+    .due-today { color: var(--mint); }
+    input[type=date], input[type=time] { color-scheme: dark; flex: none !important; width: auto; }  /* dark date/time pickers */
+    .menu .due-edit { display: flex; flex-direction: column; gap: 8px; padding: 8px; }
+
+    /* ---- recent activity ---- */
+    .act { display: flex; align-items: center; gap: 16px; padding: 16px 4px; border-top: 1px solid var(--line); }
+    .act:first-of-type { border-top: 0; }
+    .act .when { margin-left: auto; color: var(--muted); font-size: 14px; white-space: nowrap; }
+    .spark { color: var(--mint); }
+
+    /* ---- calendar ---- */
+    .cal-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+    .cal-head h2 { flex: 1; }
+    .cal-nav { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; }
+    .cal-nav:hover { background: var(--hover); }
+    .cal { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; row-gap: 6px; }
+    .cal .dow { color: var(--muted); font-size: 14px; padding-bottom: 8px; }
+    .day { position: relative; height: 38px; width: 38px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; font-size: 15px; }
+    .day:hover { background: var(--hover); }
+    .day.today { background: var(--mint); color: #062015; font-weight: 700; }
+    .day.picked { outline: 2px solid var(--mint); }
+    .day.has::after { content: ""; position: absolute; bottom: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--mint); }
+    .day.today.has::after { background: #062015; }
+    .cal.big .day { width: 100%; height: 70px; border-radius: 12px; place-items: start; padding: 8px 10px; border: 1px solid var(--line); }
+    .cal.big .day.today { color: #062015; }
+    .cal.big .day .n { font-size: 12px; color: var(--muted); align-self: end; }
+    .cal.big .day.today .n { color: #062015; }
+
+    /* ---- stat tiles ---- */
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }
+    .tiles.four { grid-template-columns: repeat(4, 1fr); }
+    .tile { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; }
+    .tile .label { display: flex; align-items: center; gap: 10px; color: #c4d2cc; font-size: 15px; }
+    .tile .num { font-size: 30px; font-weight: 700; margin-top: 10px; }
+    .meter { height: 7px; background: #26322e; border-radius: 99px; margin-top: 10px; overflow: hidden; }
+    .meter > i { display: block; height: 100%; width: 0; background: var(--mint); border-radius: 99px; transition: width .5s; }
+
+    /* ---- the mountain card ---- */
+    .scene { border-radius: 18px; overflow: hidden; position: relative; height: 190px; border: 1px solid var(--line); }
+    .scene svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .scene .words { position: absolute; left: 86px; top: 34px; font-size: 22px; font-weight: 600; line-height: 1.3; }
+    .scene .leaf2 { position: absolute; left: 28px; top: 30px; width: 40px; height: 40px; }
+
+    /* ---- analytics ---- */
+    .donut-wrap { display: flex; align-items: center; gap: 26px; margin-top: 12px; }
+    .legend > div { display: flex; align-items: center; gap: 10px; margin: 9px 0; }
+    .legend b { margin-left: auto; padding-left: 16px; }
+    .swatch { width: 11px; height: 11px; border-radius: 3px; }
+    .cbar { margin: 16px 0; }
+    .cbar .row1 { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .cbar .track { display: flex; height: 11px; background: #26322e; border-radius: 99px; overflow: hidden; }
+    .cbar .track i { display: block; height: 100%; transition: width .5s; }
+    .two { display: grid; grid-template-columns: 1fr 1.3fr; gap: 24px; }
+
+    /* ---- login screen (landing page) ---- */
+    #auth-view { min-height: 100vh; position: relative; overflow: hidden; background: #050807; padding: 26px 6vw 40px; }
+    .glow { position: absolute; border-radius: 50%; pointer-events: none; }
+    .g1 { width: 900px; height: 900px; left: -470px; top: -600px; background: radial-gradient(circle at 70% 70%, #0f3f2b 0%, #0a1f17 36%, transparent 60%); box-shadow: 0 0 0 1px #12382a; }
+    .g2 { width: 900px; height: 900px; right: -560px; bottom: -560px; background: radial-gradient(circle at 30% 30%, #145338 0%, #0b231a 36%, transparent 60%); box-shadow: 0 0 0 1px #12382a; }
+    .leaves { position: absolute; left: 0; bottom: 0; width: 220px; opacity: .8; pointer-events: none; }
+    .land-top { position: relative; display: flex; justify-content: space-between; align-items: center; }
+    .land-top .brand, .auth-card .brand { margin: 0; font-size: 30px; }
+    .brand b span, .welcome span { color: var(--mint); }
+    .top-switch { display: flex; align-items: center; gap: 18px; }
+    .pill-sm { border: 1px solid #3ddc97aa; border-radius: 99px; padding: 10px 20px; color: var(--mint); font-weight: 600; }
+    .pill-sm:hover { background: #3ddc9712; }
+    .land { position: relative; display: grid; grid-template-columns: 1fr 640px; gap: 6vw; align-items: center; margin-top: 50px; }
+    .badge { display: inline-flex; align-items: center; gap: 10px; border: 1px solid #2c6b52; border-radius: 99px; padding: 10px 18px; color: #bfe9d5; background: #0c1a15; }
+    .badge svg { stroke: var(--mint); fill: var(--mint); }
+    .hero { font-size: clamp(38px, 4.4vw, 66px); line-height: 1.12; margin: 26px 0 26px; }
+    .hero em { font-style: normal; color: var(--mint); }
+    .swoosh { position: relative; }
+    .swoosh::after { content: ""; position: absolute; left: -4px; right: -14px; bottom: -10px; height: 8px; border-bottom: 2px solid var(--mint); border-radius: 0 0 60% 40%; transform: rotate(-2deg); }
+    .sub { color: #c4d2cc; font-size: 20px; line-height: 1.5; max-width: 560px; margin: 0 0 30px; }
+    .perks { display: flex; gap: 60px; margin-bottom: 44px; color: #d4e0db; font-size: 17px; line-height: 1.35; }
+    .perks i { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 12px; background: #101b17; border: 1px solid var(--line); margin-bottom: 12px; }
+    .perks svg { stroke: var(--mint); width: 26px; height: 26px; }
+    .demo { display: flex; align-items: center; gap: 10px; }
+    .say { display: flex; gap: 16px; align-items: center; max-width: 380px; padding: 18px 22px; border-radius: 16px; background: #0d1714; border: 1px solid var(--line); color: #d4e0db; line-height: 1.5; }
+    .arrow { width: 70px; flex: none; }
+    .list { transform: rotate(5deg); padding: 16px 22px; border-radius: 14px; background: #0f1a17; border: 1px solid var(--line); line-height: 2; }
+    .list div::first-letter { color: var(--mint); }
+    .auth-card { position: relative; padding: 42px 56px 34px; border-radius: 30px; border: 1px solid #2c8a63;
+      background: linear-gradient(160deg, #0f221b 0%, #0a1411 55%, #0b1a15 100%); box-shadow: 0 0 40px #3ddc9722, inset 0 0 30px #3ddc970d; }
+    .welcome { font-size: 34px; margin: 26px 0 12px; }
+    .input-row { display: flex; align-items: center; gap: 14px; border: 1px solid var(--line); border-radius: 18px; padding: 0 18px; margin-bottom: 16px; background: #0a1210; }
+    .input-row:focus-within { border-color: #2c8a63; }
+    .input-row > svg { color: var(--muted); padding-right: 14px; border-right: 1px solid var(--line); width: 35px; height: 22px; box-sizing: content-box; }
+    .input-row input { flex: 1; background: none; border: 0; outline: none; padding: 17px 0; font-size: 17px; }
+    .eye { color: var(--muted); display: grid; place-items: center; }
+    .pill { width: 100%; border-radius: 99px; padding: 15px; font-size: 18px; font-weight: 600; display: flex; justify-content: center; align-items: center; gap: 12px; }
+    .pill.solid { background: linear-gradient(180deg, #5ee8ad, #34d08c); color: #062015; }
+    .pill.solid svg { stroke: #062015; }
+    .pill.outline { border: 1px solid #3ddc97aa; }
+    .pill.outline:hover { background: #3ddc9712; }
+    .pill:disabled { opacity: .6; cursor: wait; }
+    .or { display: flex; align-items: center; gap: 14px; color: var(--muted); margin: 18px 0; }
+    .or span { flex: 1; height: 1px; background: var(--line); }
+    .bottom-switch { text-align: center; margin: 28px 0 0; font-size: 17px; }
+    .text-link { color: var(--mint); font-weight: 600; }
+    @media (max-width: 1250px) { .land { grid-template-columns: 1fr; } .auth-card { max-width: 640px; width: 100%; margin: 0 auto; } .demo, .leaves { display: none; } }
+    @media (max-width: 600px) { #auth-view { padding: 18px 16px; } .top-switch .muted { display: none; } .auth-card { padding: 30px 22px; } .perks { gap: 22px; font-size: 15px; } .welcome { font-size: 26px; } }
+
+    /* ---- toast ---- */
+    #toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: #1a2622; border: 1px solid var(--line); padding: 12px 18px; border-radius: 12px; z-index: 10; }
     #toast.error { border-color: var(--red); color: var(--red); }
-    .auth { max-width: 380px; margin: 60px auto; }
-    .auth input { margin-top: 10px; }
+
+    /* ---- page heads, search, KPI tiles ---- */
+    .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+    .search { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 99px; padding: 11px 18px; background: #0f1a17; min-width: 300px; color: var(--muted); }
+    .search input { background: none; border: 0; outline: none; flex: 1; }
+    .pick.big { padding: 11px 14px; border-radius: 12px; }
+    .ktiles { display: grid; gap: 18px; margin-bottom: 24px; }
+    .ktiles.three { grid-template-columns: repeat(3, 1fr); }
+    .ktiles.four { grid-template-columns: repeat(4, 1fr); }
+    .ktile { position: relative; overflow: hidden; display: flex; gap: 16px; align-items: flex-start; background: linear-gradient(160deg, #16241f, var(--card)); border: 1px solid var(--line); border-radius: 18px; padding: 20px; min-height: 120px; }
+    .kicon { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; flex: none; }
+    .kicon svg.icon { width: 26px; height: 26px; }
+    .klabel { color: #c4d2cc; }
+    .knum { font-size: 32px; font-weight: 700; margin-top: 4px; }
+    .ksub { font-size: 14px; color: var(--muted); margin-top: 2px; position: relative; z-index: 1; }
+    .up { color: var(--mint); } .down { color: var(--red); }
+    .spark-svg { position: absolute; right: 0; bottom: 0; width: 120px; height: 42px; opacity: .9; }
+    #day-form { flex-wrap: wrap; }
+    #day-form #day-task { flex: 1 1 100%; }
+    #day-form #day-time { flex: 1 !important; }
+    .crow .tick svg.icon { width: 14px; height: 14px; }
+    .tl-row .day { text-align: left; }
+    .tl-row > span:nth-child(2) { flex: 1; min-width: 0; }
+    .two.wide-left { grid-template-columns: 1.6fr 1fr; }
+    .key { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+    .key i { width: 10px; height: 10px; border-radius: 3px; margin-left: 8px; }
+    svg.chart { width: 100%; height: auto; display: block; }
+
+    /* ---- calendar page ---- */
+    .cal-layout { display: grid; grid-template-columns: 1fr 390px; gap: 24px; align-items: start; }
+    .cal-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .cal-toolbar h2 { flex: 1; margin-left: 6px; }
+    .cal-nav { border: 1px solid var(--line); }
+    .month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .mdow { padding: 10px; text-align: center; color: var(--muted); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 14px; }
+    .mcell { min-height: 100px; padding: 8px; text-align: left; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
+    .mcell:hover { background: var(--hover); }
+    .mcell.out { color: #4f625b; }
+    .mcell.picked { box-shadow: inset 0 0 0 2px var(--mint); border-radius: 8px; }
+    .mnum { font-size: 15px; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; }
+    .mcell.today .mnum { background: var(--mint); color: #062015; font-weight: 700; }
+    .mchip { display: flex; align-items: center; gap: 6px; font-size: 12px; background: #1a2723; border-radius: 6px; padding: 3px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mchip i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+    .mchip.done { color: var(--muted); text-decoration: line-through; }
+    .mchip.late { background: #3a1d1d; }
+    .more { font-size: 12px; color: var(--muted); }
+    .crow { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+    .crow:first-child { border-top: 0; }
+    .crow .tick { width: 22px; height: 22px; }
+    .crow .body { flex: 1; min-width: 0; }
+
+    /* ---- timelines and feeds ---- */
+    .tl { border-left: 2px solid var(--line); margin-left: 6px; }
+    .tl-row { position: relative; padding: 11px 0 11px 22px; display: flex; gap: 14px; align-items: center; }
+    .tl-row::before { content: ""; position: absolute; left: -7px; top: 50%; margin-top: -6px; width: 12px; height: 12px; border-radius: 50%; background: #5d7068; }
+    .tl-row.first::before { background: var(--mint); }
+    .tl-row.late::before { background: var(--red); }
+    .tl-row .day { width: 96px; flex: none; }
+    .when-chip { margin-left: auto; font-size: 13px; padding: 4px 10px; border-radius: 99px; background: #1f2b27; white-space: nowrap; }
+    .when-chip.today { background: #173d2c; color: var(--mint); }
+    .when-chip.late { background: #3a1d1d; color: var(--red); }
+    .feed-row { display: flex; gap: 14px; padding: 12px 0; align-items: flex-start; border-top: 1px solid var(--line); }
+    .feed-row:first-child { border-top: 0; }
+    .feed-ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: #173d2c; color: var(--mint); flex: none; }
+    .feed-ic.blue { background: #1d2f55; color: #8fb0ff; }
+    .feed-row .when { margin-left: auto; color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+    /* ---- people rows ---- */
+    .prow { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); }
+    .prow:first-child { border-top: 0; }
+    .prow .avatar { width: 46px; height: 46px; font-size: 19px; background: #1d3a2f; color: var(--mint); }
+    .state { font-size: 14px; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .state i { width: 9px; height: 9px; border-radius: 50%; }
+    .dashed { border: 1px dashed var(--line); border-radius: 12px; padding: 10px; margin-top: 12px; }
+
+    /* ---- phones and small laptops ---- */
+    @media (max-width: 1100px) { .home, .cal-layout, .two, .two.wide-left { grid-template-columns: 1fr; } .tiles.four, .ktiles.four { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 760px) { .ktiles.three, .ktiles.four { grid-template-columns: 1fr; } .search { min-width: 0; width: 100%; } .mcell { min-height: 64px; padding: 4px; } .mchip { display: none; } .tl-row .day { width: 70px; } }
+    @media (max-width: 760px) {
+      .shell { grid-template-columns: 1fr; }
+      aside { position: static; height: auto; flex-direction: row; flex-wrap: wrap; padding: 12px; }
+      .brand { margin: 0 12px 0 0; font-size: 22px; } .promo, .me .who-name { display: none; }
+      .nav { width: auto; padding: 10px; } .nav .txt { display: none; }
+      main { padding: 20px 16px; } h1 { font-size: 26px; } .datepill { display: none; }
+    }
   </style>
 </head>
 <body>
-<main>
 
-  <!-- ============ LOGIN / SIGN UP (shown when logged out) ============ -->
-  <section id="auth-view" class="card auth">
-    <div class="logo">Task<span>mint</span></div>  <!-- the logo -->
-    <p class="muted">Paste client messages. Get tasks. Approve what's right.</p>
-    <form id="auth-form">  <!-- a form, so Enter submits it -->
-      <input id="email" type="email" placeholder="Email" autocomplete="email" required maxlength="254">
-      <input id="password" type="password" placeholder="Password (8+ characters)" autocomplete="current-password" required minlength="8" maxlength="128">
-      <div class="row">
-        <button type="submit">Log in</button>  <!-- Enter or click = log in -->
-        <button type="button" class="ghost" id="register-btn">Create account</button>
+<!-- ======================= LOGIN / SIGN UP (the landing page) ======================= -->
+<section id="auth-view">
+  <div class="glow g1"></div><div class="glow g2"></div>  <!-- soft green curves in the corners -->
+  <svg class="leaves" viewBox="0 0 220 260"><path d="M30 260C10 190 30 120 110 70c10 80-20 150-80 190z" fill="#123d2b"/><path d="M0 250c40-60 90-90 170-90-40 60-100 90-170 90z" fill="#1a5a3e"/><path d="M30 258c20-60 45-120 78-185M5 248c55-40 105-68 160-86" stroke="#0a2219" stroke-width="2" fill="none"/></svg>
+
+  <header class="land-top">
+    <div class="brand"><svg class="icon" style="width:40px;height:40px;stroke:var(--mint)" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 4 13c0-5 4-9 16-9 0 12-4 16-9 16z"/><path d="M4 21c4-4 7-7 11-10"/></svg><b>Task<span>mint</span></b></div>
+    <div class="top-switch"><span class="muted" id="switch-text">New here?</span><button class="pill-sm" id="switch-btn">Create account →</button></div>
+  </header>
+
+  <div class="land">
+    <!-- ---- left: what Taskmint is ---- -->
+    <div class="pitch">
+      <span class="badge"><svg class="icon" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>Your AI To-Do Assistant</span>
+      <h1 class="hero">Just tell us what you need to do.<br><em>We'll handle the <span class="swoosh">rest.</span></em></h1>
+      <p class="sub">Taskmint turns your messages and notes into organized tasks, reminders and a productive day, powered by AI. English, Urdu or Roman Urdu.</p>
+      <div class="perks">
+        <div><i><svg class="icon" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></i>Smart AI<br>Task Creation</div>
+        <div><i><svg class="icon" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></i>Timely<br>Reminders</div>
+        <div><i><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg></i>Stay Focused<br>&amp; Productive</div>
       </div>
-    </form>
-  </section>
-
-  <!-- ============ THE DASHBOARD (shown when logged in) ============ -->
-  <section id="app-view" class="hidden">
-    <header>
-      <div class="logo">Task<span>mint</span></div>
-      <div class="row" style="margin:0">
-        <span class="pill" id="usage">AI: …</span>  <!-- "AI: 17 of 20 left today" -->
-        <span class="pill" id="who"></span>  <!-- the logged-in email -->
-        <button class="ghost" id="logout-btn">Log out</button>
-      </div>
-    </header>
-
-    <div class="grid">
-      <div>
-        <!-- ---- the AI planner ---- -->
-        <div class="card">
-          <h2>✨ Paste a client message</h2>
-          <textarea id="message" maxlength="4000" placeholder="Bilal here, kal tak 60 sec reel bhej dena aur thumbnail bhi"></textarea>
-          <div class="row">
-            <button id="propose-btn">Suggest tasks</button>
-            <span class="muted" id="propose-info"></span>  <!-- e.g. "1 suggestion dropped" -->
-          </div>
-          <div id="proposals"></div>  <!-- suggested tasks appear here -->
-          <div class="row hidden" id="approve-row">
-            <button id="approve-btn">Save selected tasks</button>
-            <button class="ghost" id="discard-btn">Discard</button>
-          </div>
-        </div>
-
-        <!-- ---- my tasks ---- -->
-        <div class="card">
-          <div class="row" style="margin-top:0">
-            <h2 style="flex:1;margin:0">✅ My tasks</h2>
-            <select id="status-filter" style="width:auto">  <!-- filter the list -->
-              <option value="">All</option>
-              <option value="todo">To do</option>
-              <option value="in_progress">In progress</option>
-              <option value="done">Done</option>
-            </select>
-          </div>
-          <form class="row" id="task-form">  <!-- add a task by hand -->
-            <input id="task-title" placeholder="Add a task by hand" maxlength="200" required>
-            <button type="submit">Add</button>
-          </form>
-          <div id="tasks"></div>
-        </div>
-      </div>
-
-      <!-- ---- my clients ---- -->
-      <div class="card">
-        <h2>👥 Clients</h2>
-        <form class="row" id="client-form" style="margin-top:0">
-          <input id="client-name" placeholder="New client name" maxlength="100" required>
-          <button type="submit">Add</button>
-        </form>
-        <div id="clients"></div>
+      <div class="demo">
+        <div class="say"><svg class="icon" style="stroke:var(--mint);width:28px;height:28px" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><em>"Kal report finish karni ha, paani zyada peena ha aur next week plan karna ha."</em></div>
+        <svg class="arrow" viewBox="0 0 70 30"><path d="M2 20c20-14 40-14 62-6M56 8l8 6-9 5" stroke="var(--mint)" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        <div class="list"><div>✔ Finish the report</div><div>✔ Drink more water</div><div>✔ Plan next week</div></div>
       </div>
     </div>
-  </section>
-</main>
+
+    <!-- ---- right: the login / sign-up card ---- -->
+    <div class="auth-card">
+      <div class="brand"><svg class="icon" style="width:40px;height:40px;stroke:var(--mint)" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 4 13c0-5 4-9 16-9 0 12-4 16-9 16z"/><path d="M4 21c4-4 7-7 11-10"/></svg><b>Task<span>mint</span></b></div>
+      <h2 class="welcome" id="auth-title">Welcome to Task<span>mint</span> 👋</h2>
+      <p class="muted" id="auth-sub" style="margin:0 0 28px;line-height:1.5;font-size:17px">Paste any message or note. Get a to-do list. Approve what's right.</p>
+      <form id="auth-form">  <!-- a form, so Enter submits it -->
+        <label class="input-row">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
+          <input id="email" type="email" placeholder="Email address" autocomplete="email" required maxlength="254">
+        </label>
+        <label class="input-row">
+          <svg class="icon" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+          <input id="password" type="password" placeholder="Password (8+ characters)" autocomplete="current-password" required minlength="8" maxlength="128">
+          <button type="button" class="eye" id="eye-btn" title="Show password"><svg class="icon" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        </label>
+        <button class="pill solid" type="submit" id="auth-submit">Log in <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      </form>
+      <div class="or"><span></span>or<span></span></div>
+      <button class="pill outline" id="google-btn"><svg viewBox="0 0 48 48" width="22" height="22"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Continue with Google</button>
+      <p class="bottom-switch"><span class="muted" id="bottom-text">Don't have an account?</span> <button class="text-link" id="bottom-btn">Create one →</button></p>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= THE APP ======================= -->
+<div id="app-view" class="shell hidden">
+  <aside>
+    <div class="brand"><svg class="icon" style="width:34px;height:34px;stroke:var(--mint)" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 4 13c0-5 4-9 16-9 0 12-4 16-9 16z"/><path d="M4 21c4-4 7-7 11-10"/></svg><b>Task<span>mint</span></b></div>
+    <!-- each button shows one "view"; data-view says which -->
+    <button class="nav active" data-view="home"><svg class="icon" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><span class="txt">Home</span></button>
+    <button class="nav" data-view="calendar"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span class="txt">Calendar</span></button>
+    <button class="nav" data-view="analytics"><svg class="icon" viewBox="0 0 24 24"><path d="M5 20V12M12 20V5M19 20v-9"/></svg><span class="txt">Analytics</span></button>
+    <button class="nav" data-view="people"><svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/></svg><span class="txt">People</span></button>
+    <button class="nav" data-view="settings"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="txt">Settings</span></button>
+
+    <div class="promo">
+      <svg class="icon" style="stroke:var(--mint);width:26px;height:26px" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>
+      <p style="margin:12px 0 30px">Let Taskmint handle the planning, you focus on what matters.</p>
+      <svg class="leaf" viewBox="0 0 100 100"><path d="M60 95C30 80 25 45 55 10c25 30 30 60 5 85z" fill="#1f5a40"/><path d="M90 98C60 95 45 70 65 40c20 20 35 40 25 58z" fill="#2b7a55"/><path d="M58 95c0-30 0-55-3-80M88 96c-8-18-14-35-22-52" stroke="#0f2a1f" stroke-width="2" fill="none"/></svg>
+    </div>
+    <button class="me" data-view="settings"><span class="avatar" id="avatar-side">?</span><span class="who-name" id="name-side"></span></button>
+  </aside>
+
+  <main>
+    <!-- ======================= HOME ======================= -->
+    <section id="view-home">
+      <div class="top">
+        <div>
+          <h1 id="greeting">Hello</h1>  <!-- "Good evening, Abdul 👋" -->
+          <p class="lead">Tell me what you need to get done. I'll turn it into tasks you can approve, and keep you on track.</p>
+        </div>
+        <div style="display:flex;gap:14px;align-items:center">
+          <div class="datepill"><svg class="icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span id="today-text"></span></div>
+          <span class="avatar" id="avatar-top">?</span>
+        </div>
+      </div>
+
+      <div class="home">
+        <div>
+          <!-- ---- the AI box ---- -->
+          <div class="card ask">
+            <div class="ask-box">
+              <svg class="icon spark" style="margin-top:7px" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
+              <textarea id="message" rows="1" maxlength="4000" placeholder="Tell me what you need… (a message you got, or your own note)"></textarea>
+              <button class="send" id="propose-btn" title="Turn into tasks"><svg class="icon" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
+            </div>
+            <div class="chips">
+              <button class="chip" data-example="Kal subha 7 baje uthna ha, shaam 5 baje gym jana ha aur parso assignment submit karni ha">📝 My to-do example</button>
+              <button class="chip" data-example="Bilal here, kal tak 60 sec reel bhej dena aur thumbnail bhi bana dena">💬 Client message example</button>
+              <button class="chip" data-example="Bilal kal tak reel edit karega, Ahmad parso shaam 5 baje thumbnail banaye ga">👥 Team example</button>
+              <button class="chip" id="chip-add">➕ Add a task myself</button>
+            </div>
+            <div class="info" id="propose-info"></div>  <!-- e.g. "1 suggestion removed" -->
+            <div id="proposals"></div>  <!-- AI suggestions with tick boxes -->
+            <div class="add-row hidden" id="approve-row">
+              <button class="btn" id="approve-btn">Save selected tasks</button>
+              <button class="btn ghost" id="discard-btn">Discard</button>
+            </div>
+          </div>
+
+          <!-- ---- my tasks ---- -->
+          <div class="card">
+            <div class="card-head">
+              <h2><svg class="icon" style="stroke:var(--mint);width:26px;height:26px" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 12.5l3 3 5-6"/></svg>Your Tasks</h2>
+              <span class="count" id="open-count">0 open</span>
+              <select class="pick" id="show-who" title="Whose tasks to show"></select>  <!-- Everyone / Just me / Bilal... -->
+              <button class="link" id="add-toggle" style="margin-left:8px">+ Add task</button>
+            </div>
+            <form class="add-row hidden" id="task-form">  <!-- add a task by hand -->
+              <input class="field" id="task-title" placeholder="What do you need to do?" maxlength="200" required>
+              <input class="field" id="task-date" type="date" title="Due day (optional)">
+              <input class="field" id="task-time" type="time" title="Due time (optional)">
+              <select class="pick" id="task-who" title="Who does it"></select>  <!-- Me / Bilal / Ahmad... -->
+              <button class="btn" type="submit">Add</button>
+            </form>
+            <div id="tasks"></div>
+          </div>
+
+          <!-- ---- recent activity ---- -->
+          <div class="card">
+            <div class="card-head"><h2><svg class="icon" style="width:26px;height:26px" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Recent Activity</h2></div>
+            <div id="activity"></div>
+          </div>
+        </div>
+
+        <!-- ---- right column ---- -->
+        <div>
+          <div class="card" id="mini-cal"></div>
+          <div class="tiles">
+            <div class="tile"><div class="label"><svg class="icon" style="stroke:var(--mint)" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l3 3 5-6"/></svg>Completed</div><div class="num" id="t-done">0</div></div>
+            <div class="tile"><div class="label"><svg class="icon" style="stroke:var(--blue)" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>In progress</div><div class="num" id="t-doing">0</div></div>
+            <div class="tile"><div class="label"><svg class="icon" style="stroke:var(--mint)" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>Total tasks</div><div class="num" id="t-total">0</div></div>
+            <div class="tile"><div class="label"><svg class="icon" style="stroke:var(--mint)" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/></svg>AI credits today</div><div class="num" id="t-ai">–</div><div class="meter"><i id="m-ai"></i></div></div>
+          </div>
+          <div class="scene">  <!-- "Small steps. Big results." with drawn mountains -->
+            <svg viewBox="0 0 400 190" preserveAspectRatio="xMidYMid slice">
+              <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2b2a"/><stop offset=".6" stop-color="#3a3a33"/><stop offset="1" stop-color="#7a5a3f"/></linearGradient></defs>
+              <rect width="400" height="190" fill="url(#sky)"/>
+              <path d="M0 140L60 95 110 120 170 70 230 115 290 80 350 110 400 90V190H0z" fill="#2c3a36"/>
+              <path d="M0 160L50 130 120 150 190 115 260 145 330 120 400 140V190H0z" fill="#1b2724"/>
+              <path d="M0 175L80 160 150 172 230 155 310 170 400 160V190H0z" fill="#111a17"/>
+            </svg>
+            <svg class="leaf2 icon" style="stroke:var(--mint)" viewBox="0 0 24 24"><path d="M11 20A7 7 0 0 1 4 13c0-5 4-9 16-9 0 12-4 16-9 16z"/><path d="M4 21c4-4 7-7 11-10"/></svg>
+            <div class="words">Small steps.<br>Big results.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= CALENDAR ======================= -->
+    <section id="view-calendar" class="hidden">
+      <div class="page-head">
+        <div><h1>Calendar</h1><p class="lead">View and manage your tasks in one place.</p></div>
+        <label class="search"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="cal-search" placeholder="Search tasks..." maxlength="100"></label>
+      </div>
+      <div class="ktiles three" id="c-tiles"></div>  <!-- filled by drawCalendarPage() -->
+      <div class="cal-layout">
+        <div class="card">
+          <div class="cal-toolbar">
+            <button class="cal-nav" id="cal-prev" title="Previous month">‹</button>
+            <button class="cal-nav" id="cal-next" title="Next month">›</button>
+            <h2 id="cal-title"></h2>
+            <button class="chip" id="cal-today">Today</button>
+            <button class="btn" id="cal-add">+ Add Task</button>
+          </div>
+          <div class="month" id="big-cal"></div>  <!-- the month grid -->
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-head"><h2 id="day-title">Today</h2></div>
+            <form class="add-row" id="day-form">  <!-- add a task straight onto the picked day -->
+              <input class="field" id="day-task" placeholder="Add a task for this day" maxlength="200" required>
+              <input class="field" id="day-time" type="time" title="Time (optional)">
+              <button class="btn" type="submit">Add</button>
+            </form>
+            <div id="day-tasks"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>Upcoming</h2></div>
+            <div id="upcoming"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================= ANALYTICS ======================= -->
+    <section id="view-analytics" class="hidden">
+      <div class="page-head">
+        <div><h1>Analytics</h1><p class="lead">Track your productivity and stay on top of your goals.</p></div>
+        <select class="pick big" id="range" title="Time range"><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select>
+      </div>
+      <div class="ktiles four" id="a-tiles"></div>
+      <div class="two wide-left">
+        <div class="card">
+          <div class="card-head"><h2>📊 Productivity overview</h2><span class="key"><i style="background:#3ddc97"></i>Completed <i style="background:#6b8af0"></i>Added</span></div>
+          <svg id="bars" class="chart" viewBox="0 0 640 260"></svg>
+        </div>
+        <div class="card"><h2>🧩 Task distribution</h2><div class="donut-wrap"><svg id="donut" width="170" height="170" viewBox="0 0 160 160"></svg><div class="legend" id="legend"></div></div></div>
+      </div>
+      <div class="two wide-left">
+        <div class="card">
+          <h2>📈 Completion rate</h2>
+          <div class="knum" id="rate-num">0%</div><div class="ksub" id="rate-sub"></div>
+          <svg id="rate-line" class="chart" viewBox="0 0 600 140"></svg>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>⏰ Upcoming deadlines</h2><button class="link" data-view="calendar">View all →</button></div>
+          <div id="deadlines"></div>
+        </div>
+      </div>
+      <div class="card"><h2>👥 Workload per person</h2><div id="person-bars"></div></div>
+    </section>
+
+    <!-- ======================= PEOPLE ======================= -->
+    <section id="view-people" class="hidden">
+      <div class="page-head">
+        <div><h1>People</h1><p class="lead">Your team, clients and friends. Give them tasks and see who's busy.</p></div>
+        <label class="search"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="people-search" placeholder="Search people..." maxlength="100"></label>
+      </div>
+      <div class="ktiles four" id="p-tiles"></div>
+      <div class="two wide-left">
+        <div class="card">
+          <div class="card-head"><h2>👥 Team members</h2></div>
+          <div id="clients"></div>
+          <form class="add-row dashed" id="client-form">
+            <input class="field" id="client-name" placeholder="Add a person (team member, client, friend...)" maxlength="100" required>
+            <button class="btn" type="submit">Add</button>
+          </form>
+        </div>
+        <div class="card"><div class="card-head"><h2>⚡ Team activity</h2></div><div id="team-activity"></div></div>
+      </div>
+      <div class="card"><div class="card-head"><h2>📊 Who's busy</h2><span class="key"><i style="background:#6b8af0"></i>Open <i style="background:#3ddc97"></i>Done</span></div><div id="team-bars"></div></div>
+    </section>
+
+    <!-- ======================= SETTINGS ======================= -->
+    <section id="view-settings" class="hidden">
+      <h1>Settings</h1>
+      <div class="card" style="max-width:560px">
+        <p class="muted" style="margin-top:0">Logged in as <b id="who" style="color:var(--text)"></b></p>
+        <label class="muted" for="display-name">Name to greet you with</label>
+        <form class="add-row" id="name-form"><input class="field" id="display-name" maxlength="40" placeholder="e.g. Haseeb"><button class="btn" type="submit">Save</button></form>
+        <p class="muted" id="usage-text"></p>
+        <button class="btn ghost" id="logout-btn">Log out</button>
+      </div>
+    </section>
+  </main>
+</div>
 <div id="toast" class="hidden"></div>  <!-- small pop-up messages -->
 
 <script>
-// ===================================================================
-// Taskmint dashboard. It only talks to our own API (the same /tasks,
-// /clients, /planner and /auth endpoints we tested in /docs).
+// =====================================================================
+// Taskmint dashboard. It only talks to our own API (/auth, /tasks,
+// /clients, /planner), the same endpoints we tested in /docs.
 // SAFETY RULE: text from users or the AI is ONLY ever put on the page
-// with textContent, never innerHTML, so nobody can inject HTML/scripts.
-// ===================================================================
+// with textContent (inside el()), never innerHTML, so nobody can inject
+// HTML or scripts.
+// =====================================================================
 
 const $ = (id) => document.getElementById(id);  // shortcut: $("tasks") = the element with id="tasks"
-let token = sessionStorage.getItem("taskmint_token");  // the login wristband; sessionStorage = forgotten when the tab closes
-let clients = [];  // my clients, kept here so tasks can show the client's name
-let proposals = [];  // the AI's latest suggestions
+let token = sessionStorage.getItem("taskmint_token");  // the login wristband; forgotten when the tab closes
+let email = "";  // who is logged in
+let clients = [], allTasks = [], proposals = [], usage = null;  // data from the API
+let calMonth = firstOfMonth(new Date());  // which month the calendars show
+let pickedDay = null;  // the day clicked in the big calendar
+const STATUS = [["todo", "To do", "var(--blue)"], ["in_progress", "In progress", "var(--amber)"], ["done", "Done", "var(--mint)"]];  // [value, label, colour]
+const TAG_COLOURS = [["#1d2f55", "#8fb0ff"], ["#173d2c", "#5fe0a5"], ["#33244f", "#c4a8ff"], ["#45331a", "#f5c26b"]];  // [background, text] pairs for name tags
 
 // ---------- small helpers ----------
 
-function el(tag, props = {}, ...children) {  // build an element safely: el("div", {className: "item"}, "text")
-  const node = document.createElement(tag);  // the new element
-  Object.assign(node, props);  // set its properties (className, onclick, value...)
-  for (const child of children) node.append(child);  // strings become TEXT, never HTML
+function el(tag, props = {}, ...children) {  // build an element safely: el("div", {className: "x"}, "text")
+  const node = document.createElement(tag);
+  Object.assign(node, props);  // className, onclick, value...
+  for (const child of children) if (child !== null && child !== "") node.append(child);  // strings become TEXT, never HTML
   return node;
 }
+function svgEl(tag, attrs) {  // build an SVG element: svgEl("circle", {r: 50})
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  return node;
+}
+function icon(path) {  // a small line icon from an SVG path
+  const s = svgEl("svg", { class: "icon", viewBox: "0 0 24 24" });
+  s.append(svgEl("path", { d: path }));
+  return s;
+}
+const CLOCK = "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2";
+const CHECK = "M6 12.5l4 4 8-9";
 
-function toast(text, isError = false) {  // show a short message at the bottom
+function toast(text, isError = false) {  // a short message at the bottom
   const box = $("toast");
-  box.textContent = text;  // safe: plain text
-  box.className = isError ? "error" : "";  // red border for errors
-  clearTimeout(toast.timer);  // restart the timer if one is running
-  toast.timer = setTimeout(() => box.classList.add("hidden"), 3500);  // hide after 3.5 s
+  box.textContent = text;
+  box.className = isError ? "error" : "";
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => box.classList.add("hidden"), 3500);
 }
-
-function errorText(data) {  // turn the API's error into one readable line
+function errorText(data) {  // the API's error as one readable line
   if (!data || !data.detail) return "Something went wrong. Try again.";
-  if (typeof data.detail === "string") return data.detail;  // e.g. "Daily AI limit reached (20 per day)..."
-  return data.detail.map((d) => d.msg).join(", ");  // 422 from Pydantic: a list of problems
+  if (typeof data.detail === "string") return data.detail;
+  return data.detail.map((d) => d.msg).join(", ");  // 422 from Pydantic: a list
 }
-
-async function api(path, options = {}) {  // every call to our API goes through here
+async function api(path, options = {}) {  // every API call goes through here
   const headers = options.headers || {};
   if (token) headers.Authorization = "Bearer " + token;  // show the wristband
-  if (options.json !== undefined) {  // sending JSON?
-    headers["Content-Type"] = "application/json";
-    options.body = JSON.stringify(options.json);  // {title: "x"} -> '{"title":"x"}'
-  }
-  const response = await fetch(path, { ...options, headers });  // send it
-  if (response.status === 401 && token) {  // wristband expired or fake
-    logout();  // back to the login screen
-    throw new Error("Your session ended. Please log in again.");
-  }
+  if (options.json !== undefined) { headers["Content-Type"] = "application/json"; options.body = JSON.stringify(options.json); }
+  let response;
+  try { response = await fetch(path, { ...options, headers }); }
+  catch { throw new Error("Can't reach the server. Is uvicorn still running?"); }  // "Failed to fetch" = no server answered
+  if (response.status === 401 && token) { logout(); throw new Error("Your session ended. Please log in again."); }
   if (response.status === 204) return null;  // deleted: nothing to read
-  const data = await response.json().catch(() => null);  // read the JSON answer (null if none)
-  if (!response.ok) throw new Error(errorText(data));  // 4xx/5xx -> an error with the API's message
+  const data = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(errorText(data));
   return data;
 }
+async function run(button, work) {  // disable a button while working; errors become a toast
+  if (button) button.disabled = true;  // no double clicks (= no double AI credits)
+  try { await work(); } catch (error) { toast(error.message, true); } finally { if (button) button.disabled = false; }
+}
+function store(key, value) { try { value === undefined ? localStorage.getItem(key) : localStorage.setItem(key, value); } catch {} }  // browser storage can be blocked
+function load(key) { try { return localStorage.getItem(key); } catch { return null; } }
 
-async function run(button, work) {  // disable a button while it works, show errors as a toast
-  if (button) button.disabled = true;  // stops double clicks (and double AI credits)
-  try { await work(); }
-  catch (error) { toast(error.message, true); }  // e.g. "Client 5 does not exist"
-  finally { if (button) button.disabled = false; }
+// ---------- dates ----------
+
+function firstOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
+function parseTime(iso) { return new Date(/[zZ]|[+-]\d\d:\d\d$/.test(iso) ? iso : iso + "Z"); }  // the API sends UTC; add "Z" if the time zone is missing
+function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+function localDay(text) { const [y, m, d] = text.split("-").map(Number); return new Date(y, m - 1, d); }  // "2026-11-16" -> that day on this computer's clock
+function todayText() { return new Date().toLocaleDateString("en-CA"); }  // today as "2026-11-15"
+function dueMoment(t) {  // when the task is due, as a moment (end of day if there's no time)
+  if (!t.due_date) return null;
+  const day = localDay(t.due_date);
+  if (!t.due_time) { day.setHours(23, 59); return day; }
+  const [h, m] = t.due_time.split(":").map(Number);
+  day.setHours(h, m);
+  return day;
+}
+function dueText(t) {  // "Today • 8:00 PM" / "Tomorrow" / "Tue, Nov 17 • 7:30 AM"
+  const day = localDay(t.due_date), now = new Date(), tmr = new Date(); tmr.setDate(now.getDate() + 1);
+  let label = sameDay(day, now) ? "Today" : sameDay(day, tmr) ? "Tomorrow" : day.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  if (t.due_time) label += " • " + dueMoment(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return label;
+}
+function isOverdue(t) { const m = dueMoment(t); return t.status !== "done" && m !== null && m < new Date(); }
+function dueLine(t) {  // the clock line under a task title
+  if (!t.due_date) return null;
+  const late = isOverdue(t), today = sameDay(localDay(t.due_date), new Date());
+  return el("div", { className: "meta" + (late ? " overdue" : today ? " due-today" : "") }, icon(CLOCK), (late ? "Overdue • " : "") + dueText(t));
+}
+function when(iso) {  // "Today • 8:00 PM" / "Yesterday • 9:15 AM" / "Nov 12 • 3:00 PM"
+  const d = parseTime(iso), now = new Date(), y = new Date(now); y.setDate(now.getDate() - 1);
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const day = sameDay(d, now) ? "Today" : sameDay(d, y) ? "Yesterday" : d.toLocaleDateString([], { month: "short", day: "numeric" });
+  return `${day} • ${time}`;
+}
+
+// ---------- names ----------
+
+function myName() {  // the saved name, or a guess from the email ("abdulhasyb711@..." -> "Abdulhasyb")
+  const saved = load("taskmint_name_" + email);
+  if (saved) return saved;
+  const guess = email.split("@")[0].replace(/[^a-zA-Z]/g, "");
+  return guess ? guess[0].toUpperCase() + guess.slice(1) : "there";
+}
+function fillPeople(select, meLabel, chosen) {  // options: Me + everyone on my People list
+  select.replaceChildren(el("option", { value: "" }, meLabel));
+  for (const c of clients) select.append(el("option", { value: String(c.id), selected: c.id === chosen }, "👤 " + c.name));
+}
+function personName(id) { const c = clients.find((x) => x.id === id); return c ? c.name : ""; }
+function tagFor(task) {  // the coloured pill on a task: WHO does it (a person's name, or "Me")
+  const name = task.assignee_id ? personName(task.assignee_id) : "Me";
+  const [bg, fg] = TAG_COLOURS[[...name].reduce((sum, ch) => sum + ch.charCodeAt(0), 0) % TAG_COLOURS.length];  // same name = same colour
+  return el("span", { className: "tag", style: `background:${bg};color:${fg}` }, name);
 }
 
 // ---------- logging in and out ----------
 
-async function login(email, password) {
-  const form = new URLSearchParams({ username: email, password });  // /auth/login wants a FORM (username = email), like /docs Authorize
+async function login(mail, password) {
+  const form = new URLSearchParams({ username: mail, password });  // /auth/login wants a FORM (username = email)
   const data = await api("/auth/login", { method: "POST", body: form });
-  token = data.access_token;  // keep the wristband
-  sessionStorage.setItem("taskmint_token", token);  // survives a page refresh, not closing the tab
+  token = data.access_token;
+  sessionStorage.setItem("taskmint_token", token);
   await start();
 }
-
 function logout() {
-  token = null;  // forget the wristband
+  token = null;
   sessionStorage.removeItem("taskmint_token");
-  $("app-view").classList.add("hidden");  // hide the dashboard
-  $("auth-view").classList.remove("hidden");  // show the login form
+  $("app-view").classList.add("hidden");
+  $("auth-view").classList.remove("hidden");
+  $("password").value = "";  // don't leave the password sitting in the box
 }
-
-$("auth-form").onsubmit = (event) => {  // "Log in" clicked (or Enter)
-  event.preventDefault();  // don't reload the page
-  run(event.submitter, () => login($("email").value.trim(), $("password").value));
+let signingUp = false;  // false = "Log in" mode, true = "Create account" mode
+function setMode(up) {  // switch the card between logging in and signing up
+  signingUp = up;
+  $("auth-title").replaceChildren(up ? "Create your account ✨" : "Welcome to Task", ...(up ? [] : [el("span", {}, "mint"), " 👋"]));
+  $("auth-sub").textContent = up ? "Free. Takes 10 seconds. Your tasks stay private to you." : "Paste any message or note. Get a to-do list. Approve what's right.";
+  $("auth-submit").firstChild.textContent = up ? "Create account " : "Log in ";
+  $("password").autocomplete = up ? "new-password" : "current-password";  // lets the browser suggest a strong password
+  $("bottom-text").textContent = up ? "Already have an account?" : "Don't have an account?";
+  $("bottom-btn").textContent = up ? "Log in →" : "Create one →";
+  $("switch-text").textContent = up ? "Have an account?" : "New here?";
+  $("switch-btn").textContent = up ? "Sign in →" : "Create account →";
+  $("email").focus();
+}
+$("bottom-btn").onclick = () => setMode(!signingUp);
+$("switch-btn").onclick = () => setMode(!signingUp);
+$("google-btn").onclick = () => toast("Google sign-in is coming when Taskmint goes live. Use email for now.");
+$("auth-form").onsubmit = (event) => {  // "Log in" or "Create account" (or Enter)
+  event.preventDefault();
+  run($("auth-submit"), async () => {
+    const mail = $("email").value.trim(), password = $("password").value;
+    if (signingUp) await api("/auth/register", { method: "POST", json: { email: mail, password } });  // make the account first
+    await login(mail, password);
+    if (signingUp) { toast("Account created. Welcome!"); setMode(false); }
+  });
+};
+$("logout-btn").onclick = logout;
+$("eye-btn").onclick = () => {  // show / hide the password
+  const box = $("password");
+  box.type = box.type === "password" ? "text" : "password";
+  $("eye-btn").title = box.type === "password" ? "Show password" : "Hide password";
 };
 
-$("register-btn").onclick = (event) => run(event.target, async () => {  // "Create account"
-  if (!$("auth-form").reportValidity()) return;  // let the browser point at an empty/short field
-  const email = $("email").value.trim();
-  await api("/auth/register", { method: "POST", json: { email, password: $("password").value } });  // make the account
-  await login(email, $("password").value);  // then log straight in
-  toast("Account created. Welcome!");
-});
+// ---------- switching views (Home, Calendar, ...) ----------
 
-$("logout-btn").onclick = logout;
+function show(view) {
+  for (const section of document.querySelectorAll("main > section")) section.classList.toggle("hidden", section.id !== "view-" + view);
+  for (const button of document.querySelectorAll(".nav")) button.classList.toggle("active", button.dataset.view === view);
+}
+for (const button of document.querySelectorAll("[data-view]")) button.onclick = () => show(button.dataset.view);
 
-// ---------- loading data ----------
+// ---------- loading everything ----------
 
-async function start() {  // after login (or on refresh with a saved token)
-  const me = await api("/auth/me");  // who am I? (also checks the token still works)
-  $("who").textContent = me.email;
+async function start() {
+  email = (await api("/auth/me")).email;  // also checks the token still works
   $("auth-view").classList.add("hidden");
   $("app-view").classList.remove("hidden");
-  await Promise.all([loadClients(), loadUsage()]);  // clients first (tasks show client names)...
-  await loadTasks();  // ...then tasks
+  show("home");
+  await refresh();
+}
+async function refresh() {  // reload all data, then redraw everything
+  [clients, allTasks, usage] = await Promise.all([api("/clients"), api("/tasks"), api("/planner/usage")]);
+  drawAll();
+}
+async function refreshUsage() { usage = await api("/planner/usage"); drawStats(); }
+
+function drawAll() {
+  const hour = new Date().getHours();
+  const hello = hour < 5 ? "Good evening" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  $("greeting").textContent = `${hello}, ${myName()} 👋`;
+  $("today-text").textContent = new Date().toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  for (const id of ["avatar-side", "avatar-top"]) $(id).textContent = myName()[0].toUpperCase();
+  $("name-side").textContent = myName();
+  $("who").textContent = email;
+  $("display-name").value = load("taskmint_name_" + email) || "";
+  const keep = $("show-who").value;  // remember the current choice
+  $("show-who").replaceChildren(el("option", { value: "" }, "Everyone"), el("option", { value: "me" }, "Just me"), ...clients.map((c) => el("option", { value: String(c.id) }, c.name)));
+  $("show-who").value = [...$("show-who").options].some((o) => o.value === keep) ? keep : "";
+  fillPeople($("task-who"), "👤 Me", null);
+  drawTasks(); drawActivity(); drawStats(); drawCalendars(); drawPeople(); drawAnalytics();
 }
 
-async function loadUsage() {
-  const u = await api("/planner/usage");  // {"used": 3, "limit": 20, "remaining": 17}
-  $("usage").textContent = `AI: ${u.remaining} of ${u.limit} left today`;
+// ---------- tasks ----------
+
+function taskRow(t) {  // one task: tick circle, title, time, tag, ⋮ menu
+  const row = el("div", { className: "task" + (t.status === "done" ? " is-done" : "") });
+  const tick = el("button", { className: "tick", title: t.status === "done" ? "Mark as not done" : "Mark as done",
+    onclick: () => run(tick, () => setStatus(t, t.status === "done" ? "todo" : "done")) });
+  if (t.status === "done") tick.append(icon(CHECK));
+  const meta = t.due_date ? dueLine(t) : el("div", { className: "meta" }, "Added " + when(t.created_at));  // due time if it has one
+  if (t.client_id) meta.append(el("span", {}, " • from " + personName(t.client_id)));  // who asked for it
+  if (t.status === "in_progress") meta.append(el("span", { className: "badge-doing" }, " • In progress"));
+  const body = el("div", { className: "body" }, el("div", { className: "title" }, t.title),
+    t.description ? el("div", { className: "meta" }, t.description) : "", meta);
+  const dots = el("button", { className: "dots", title: "More", onclick: (e) => { e.stopPropagation(); openMenu(row, t); } }, "⋮");
+  row.append(tick, body, tagFor(t), dots);
+  return row;
 }
-
-function clientName(id) {  // client id -> "Bilal" (or "" if none)
-  const found = clients.find((c) => c.id === id);
-  return found ? found.name : "";
+function openMenu(row, t) {  // the small ⋮ menu
+  closeMenus();
+  const choices = STATUS.filter(([value]) => value !== t.status).map(([value, label]) =>
+    el("button", { onclick: () => run(null, () => setStatus(t, value)) }, "Mark as " + label.toLowerCase()));
+  const dateBox = el("input", { className: "field", type: "date", value: t.due_date || "" });
+  const timeBox = el("input", { className: "field", type: "time", value: t.due_time ? t.due_time.slice(0, 5) : "" });
+  const editor = el("div", { className: "due-edit hidden", onclick: (e) => e.stopPropagation() }, dateBox, timeBox,
+    el("button", { className: "btn", onclick: () => run(null, async () => {  // save the new due day/time
+      const due_date = dateBox.value || (timeBox.value ? todayText() : null);  // a time alone = today
+      await api(`/tasks/${t.id}`, { method: "PATCH", json: { due_date, due_time: due_date && timeBox.value ? timeBox.value : null } });
+      await refresh();
+    }) }, "Save"));
+  const assign = el("select", { className: "pick", onclick: (e) => e.stopPropagation(), onchange: () => run(null, async () => {  // give it to someone
+    await api(`/tasks/${t.id}`, { method: "PATCH", json: { assignee_id: assign.value ? Number(assign.value) : null } });
+    await refresh();
+  }) });
+  fillPeople(assign, "👤 Me", t.assignee_id);
+  choices.push(el("div", { className: "due-edit", onclick: (e) => e.stopPropagation() }, el("span", { className: "muted" }, "Assigned to"), assign));
+  choices.push(el("button", { onclick: (e) => { e.stopPropagation(); editor.classList.remove("hidden"); dateBox.focus(); } }, "📅 " + (t.due_date ? "Change due date" : "Set due date")));
+  if (t.due_date) choices.push(el("button", { onclick: () => run(null, async () => { await api(`/tasks/${t.id}`, { method: "PATCH", json: { due_date: null } }); await refresh(); }) }, "Remove due date"));
+  row.append(el("div", { className: "menu" }, ...choices, editor,
+    el("button", { className: "danger", onclick: () => run(null, async () => { await api(`/tasks/${t.id}`, { method: "DELETE" }); await refresh(); }) }, "Delete task")));
 }
+function closeMenus() { document.querySelectorAll(".menu").forEach((m) => m.remove()); }
+document.addEventListener("click", closeMenus);  // click anywhere else = close the menu
 
-// ---------- clients ----------
+async function setStatus(t, status) {
+  await api(`/tasks/${t.id}`, { method: "PATCH", json: { status } });
+  await refresh();
+}
+function drawTasks() {
+  const order = { in_progress: 0, todo: 1, done: 2 };  // doing first, done last
+  const soon = (t) => (dueMoment(t) || new Date(8.64e15)).getTime();  // no due date = the far future
+  const who = $("show-who").value;  // "" = everyone, "me", or a person's id
+  const shown = allTasks.filter((t) => who === "" || (who === "me" ? !t.assignee_id : t.assignee_id === Number(who)));
+  const tasks = [...shown].sort((a, b) => (a.status === "done") - (b.status === "done") || soon(a) - soon(b) || order[a.status] - order[b.status] || b.id - a.id);  // open first, soonest due first
+  const list = $("tasks");
+  list.replaceChildren();
+  const open = shown.filter((t) => t.status !== "done").length;
+  $("open-count").textContent = `${open} open`;
+  if (!tasks.length) list.append(el("p", { className: "muted" }, "No tasks yet. Tell Taskmint what you need above, or add one yourself."));
+  for (const t of tasks.slice(0, 12)) list.append(taskRow(t));
+}
+$("show-who").onchange = drawTasks;  // re-filter, no API call
+$("add-toggle").onclick = () => { $("task-form").classList.toggle("hidden"); $("task-title").focus(); };
+$("chip-add").onclick = () => { $("task-form").classList.remove("hidden"); $("task-title").focus(); };
+$("task-form").onsubmit = (event) => {
+  event.preventDefault();
+  run(event.submitter, async () => {
+    const time = $("task-time").value, due_date = $("task-date").value || (time ? todayText() : null);  // a time alone = today
+    const who = $("task-who").value;  // "" = me
+    await api("/tasks", { method: "POST", json: { title: $("task-title").value, due_date, due_time: time || null, assignee_id: who ? Number(who) : null } });
+    $("task-title").value = ""; $("task-date").value = ""; $("task-time").value = "";
+    await refresh();
+  });
+};
 
-async function loadClients() {
-  clients = await api("/clients");  // only MY clients (the API makes sure)
-  const list = $("clients");
-  list.replaceChildren();  // clear the old list
-  if (!clients.length) list.append(el("p", { className: "muted" }, "No clients yet. Add one, and the AI will match messages to them by name."));
-  for (const c of clients) {
-    list.append(el("div", { className: "item" },
-      el("div", { className: "grow" }, c.name, el("div", { className: "muted" }, `${c.open_tasks} open task${c.open_tasks === 1 ? "" : "s"}`)),
-      el("button", { className: "danger", title: "Delete client (tasks are kept)", onclick: (e) => run(e.target, async () => {
-        if (!confirm(`Delete ${c.name}? Their tasks are kept.`)) return;  // ask first
-        await api(`/clients/${c.id}`, { method: "DELETE" });
-        await loadClients(); await loadTasks();  // refresh both lists
-      }) }, "✕")));
+// ---------- recent activity ----------
+
+function drawActivity() {  // the newest tasks, as "Task created: ..."
+  const list = $("activity");
+  list.replaceChildren();
+  const latest = [...allTasks].sort((a, b) => b.id - a.id).slice(0, 5);
+  if (!latest.length) list.append(el("p", { className: "muted" }, "Nothing yet."));
+  for (const t of latest) {
+    const s = icon("M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"); s.classList.add("spark");
+    list.append(el("div", { className: "act" }, s, el("span", {}, (t.status === "done" ? "Completed: " : "Task created: ") + t.title), el("span", { className: "when" }, when(t.completed_at || t.created_at))));
   }
 }
 
+// ---------- stat tiles ----------
+
+function drawStats() {  // the 4 tiles on Home + the usage line in Settings
+  const count = (st) => allTasks.filter((t) => t.status === st).length;
+  $("t-done").textContent = count("done"); $("t-doing").textContent = count("in_progress"); $("t-total").textContent = allTasks.length;
+  if (usage) {
+    $("t-ai").textContent = `${usage.remaining}/${usage.limit}`;
+    $("m-ai").style.width = `${(usage.remaining / usage.limit) * 100}%`;
+    $("usage-text").textContent = `AI requests today: ${usage.used} used, ${usage.remaining} left. Resets at 5:00 AM (Pakistan time).`;
+  }
+}
+
+// ---------- shared chart helpers ----------
+
+const COL = { mint: "#3ddc97", blue: "#6b8af0", amber: "#f5b94a", red: "#ff6b6b" };  // chart colours
+const ICONS = {
+  check: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM8 12.5l3 3 5-6", clock: CLOCK, bolt: "M13 2L4 14h7l-1 8 9-12h-7z",
+  list: "M4 5h16M4 12h16M4 19h10", users: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6",
+  alert: "M12 3l10 18H2zM12 10v4M12 17.5v.5", star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z", plus: "M12 5v14M5 12h14",
+};
+function dayKey(d) { return d.toLocaleDateString("en-CA"); }  // a day as "2026-11-15"
+function lastDays(n) {  // the last n days, oldest first, each at midnight
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i); out.push(d); }
+  return out;
+}
+function perDay(field, days) {  // how many tasks have this time (created_at / completed_at) on each day
+  const counts = Object.fromEntries(days.map((d) => [dayKey(d), 0]));
+  for (const t of allTasks) { if (!t[field]) continue; const k = dayKey(parseTime(t[field])); if (k in counts) counts[k]++; }
+  return days.map((d) => counts[dayKey(d)]);
+}
+let gradId = 0;  // each SVG gradient needs its own id
+function sparkline(values, colour) {  // the little wave in the corner of a tile
+  const w = 150, h = 50, max = Math.max(1, ...values), step = w / Math.max(1, values.length - 1);
+  const pts = values.map((v, i) => [i * step, h - 6 - (v / max) * (h - 14)]);
+  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const box = svgEl("svg", { class: "spark-svg", viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: "none" });
+  const id = "g" + gradId++;
+  const grad = svgEl("linearGradient", { id, x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.append(svgEl("stop", { offset: 0, "stop-color": colour, "stop-opacity": 0.35 }), svgEl("stop", { offset: 1, "stop-color": colour, "stop-opacity": 0 }));
+  const defs = svgEl("defs", {}); defs.append(grad);
+  box.append(defs, svgEl("path", { d: `${line} L${w} ${h} L0 ${h} Z`, fill: `url(#${id})` }), svgEl("path", { d: line, fill: "none", stroke: colour, "stroke-width": 2 }));
+  return box;
+}
+function change(now, before) {  // "↑ 20%" / "↓ 5%" compared with the period before
+  if (!before) return now ? el("span", { className: "up" }, "↑ new") : el("span", {}, "no change");
+  const pct = Math.round(((now - before) / before) * 100);
+  return el("span", { className: pct >= 0 ? "up" : "down" }, `${pct >= 0 ? "↑" : "↓"} ${Math.abs(pct)}% vs before`);
+}
+function ktile(iconName, colour, label, value, sub, series) {  // one KPI tile: icon, label, big number, small line, wave
+  const ic = el("span", { className: "kicon", style: `color:${colour};background:${colour}22` }); ic.append(icon(ICONS[iconName]));
+  const body = el("div", { style: "position:relative;z-index:1" }, el("div", { className: "klabel" }, label), el("div", { className: "knum" }, String(value)));
+  if (sub) body.append(el("div", { className: "ksub" }, sub));
+  const tile = el("div", { className: "ktile" }, ic, body);
+  if (series) tile.append(sparkline(series, colour));
+  return tile;
+}
+function dotColour(t) {  // the dot on a calendar chip: done / late / doing / who
+  if (t.status === "done") return COL.mint;
+  if (isOverdue(t)) return COL.red;
+  if (t.status === "in_progress") return COL.amber;
+  return COL.blue;
+}
+function compactRow(t) {  // a slim task line: tick, title, due, tag
+  const tick = el("button", { className: "tick", title: "Mark as done", onclick: () => run(tick, () => setStatus(t, t.status === "done" ? "todo" : "done")) });
+  if (t.status === "done") tick.append(icon(CHECK));
+  return el("div", { className: "crow task" + (t.status === "done" ? " is-done" : "") }, tick,
+    el("div", { className: "body" }, el("div", { className: "title", style: "font-size:15px" }, t.title), t.due_date ? dueLine(t) : ""), tagFor(t));
+}
+
+// ---------- calendars ----------
+
+function tasksOn(day) { return allTasks.filter((t) => sameDay(t.due_date ? localDay(t.due_date) : parseTime(t.created_at), day)); }  // due day, or the day it was added
+function drawCalendar(box, big) {  // a month grid; big = the Calendar page version
+  box.replaceChildren();
+  const title = calMonth.toLocaleDateString([], { month: "long", year: "numeric" });
+  const move = (n) => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + n, 1); drawCalendars(); };
+  const head = el("div", { className: "cal-head" },
+    el("h2", {}, (() => { const s = icon("M3 5h18v16H3zM3 10h18M8 3v4M16 3v4"); return s; })(), title),
+    el("button", { className: "cal-nav", title: "Previous month", onclick: () => move(-1) }, "‹"),
+    el("button", { className: "cal-nav", title: "Next month", onclick: () => move(1) }, "›"));
+  const grid = el("div", { className: "cal" + (big ? " big" : "") });
+  for (const d of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) grid.append(el("div", { className: "dow" }, d));
+  const offset = (calMonth.getDay() + 6) % 7;  // Monday-first: how many empty boxes before the 1st
+  for (let i = 0; i < offset; i++) grid.append(el("div"));
+  const days = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();  // days in this month
+  for (let n = 1; n <= days; n++) {
+    const day = new Date(calMonth.getFullYear(), calMonth.getMonth(), n);
+    const count = tasksOn(day).length;
+    let cls = "day";
+    if (sameDay(day, new Date())) cls += " today";
+    if (count) cls += " has";
+    if (pickedDay && sameDay(day, pickedDay)) cls += " picked";
+    const cell = el("button", { className: cls, onclick: () => { pickedDay = day; calMonth = firstOfMonth(day); show("calendar"); drawCalendars(); } }, String(n));
+    if (big && count) cell.append(el("span", { className: "n" }, `${count} task${count === 1 ? "" : "s"}`));
+    grid.append(cell);
+  }
+  box.append(head, grid);
+}
+function drawCalendars() {  // the mini calendar on Home + the whole Calendar page
+  drawCalendar($("mini-cal"), false);
+  drawCalendarPage();
+}
+
+function drawCalendarPage() {
+  const today = new Date(), q = $("cal-search").value.trim().toLowerCase();
+  const match = (t) => !q || t.title.toLowerCase().includes(q);  // the search box
+  const open = allTasks.filter((t) => t.status !== "done");
+  // ---- tiles ----
+  const dueToday = allTasks.filter((t) => t.due_date && sameDay(localDay(t.due_date), today));
+  const week = open.filter((t) => { const m = dueMoment(t); return m && m >= today && m - today < 7 * 864e5; });
+  const late = open.filter(isOverdue);
+  $("c-tiles").replaceChildren(
+    ktile("check", COL.mint, "Due today", dueToday.length, `${dueToday.filter((t) => t.status === "done").length} completed`),
+    ktile("clock", COL.blue, "Due this week", week.length, "in the next 7 days"),
+    ktile("alert", late.length ? COL.red : COL.mint, "Overdue", late.length, late.length ? "past their due time" : "nothing late 🎉"));
+  // ---- the month grid ----
+  $("cal-title").textContent = calMonth.toLocaleDateString([], { month: "long", year: "numeric" });
+  const grid = $("big-cal");
+  grid.replaceChildren(...["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => el("div", { className: "mdow" }, d)));
+  const offset = (calMonth.getDay() + 6) % 7;  // empty boxes before the 1st (Monday first)
+  const days = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
+  const start = new Date(calMonth); start.setDate(1 - offset);  // the Monday the grid starts on
+  for (let i = 0; i < Math.ceil((offset + days) / 7) * 7; i++) {
+    const day = new Date(start); day.setDate(start.getDate() + i);
+    const tasks = tasksOn(day).filter(match);
+    let cls = "mcell";
+    if (day.getMonth() !== calMonth.getMonth()) cls += " out";  // last/next month: greyed
+    if (sameDay(day, today)) cls += " today";
+    if (pickedDay && sameDay(day, pickedDay)) cls += " picked";
+    const cell = el("button", { className: cls, onclick: () => { pickedDay = day; drawCalendarPage(); } }, el("span", { className: "mnum" }, String(day.getDate())));
+    for (const t of tasks.slice(0, 2)) {  // at most 2 chips per day
+      const time = t.due_time ? " · " + dueMoment(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+      cell.append(el("span", { className: "mchip" + (t.status === "done" ? " done" : isOverdue(t) ? " late" : ""), title: t.title },
+        el("i", { style: `background:${dotColour(t)}` }), t.title + time));
+    }
+    if (tasks.length > 2) cell.append(el("span", { className: "more" }, `+${tasks.length - 2} more`));
+    grid.append(cell);
+  }
+  // ---- the picked day ----
+  const day = pickedDay || today;
+  $("day-title").textContent = (sameDay(day, today) ? "Today, " : "") + day.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+  const list = $("day-tasks");
+  list.replaceChildren();
+  const onDay = tasksOn(day).filter(match);
+  if (!onDay.length) list.append(el("p", { className: "muted" }, "Nothing on this day yet."));
+  for (const t of onDay) list.append(compactRow(t));
+  // ---- upcoming ----
+  const up = $("upcoming");
+  up.replaceChildren();
+  const soon = open.filter((t) => t.due_date && !isOverdue(t)).filter(match).sort((a, b) => dueMoment(a) - dueMoment(b)).slice(0, 6);
+  if (!soon.length) up.append(el("p", { className: "muted" }, "No upcoming deadlines."));
+  for (const t of soon) up.append(compactRow(t));
+}
+$("cal-prev").onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); drawCalendars(); };
+$("cal-next").onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); drawCalendars(); };
+$("cal-today").onclick = () => { calMonth = firstOfMonth(new Date()); pickedDay = new Date(); drawCalendars(); };
+$("cal-add").onclick = () => { if (!pickedDay) pickedDay = new Date(); drawCalendarPage(); $("day-task").focus(); };
+$("cal-search").oninput = drawCalendarPage;  // filter as you type
+$("day-form").onsubmit = (event) => {  // add a task on the picked day
+  event.preventDefault();
+  run(event.submitter, async () => {
+    const time = $("day-time").value;
+    await api("/tasks", { method: "POST", json: { title: $("day-task").value, due_date: dayKey(pickedDay || new Date()), due_time: time || null } });
+    $("day-task").value = ""; $("day-time").value = "";
+    await refresh();
+  });
+};
+
+// ---------- people ----------
+
+function drawPeople() {
+  const q = $("people-search").value.trim().toLowerCase();
+  const assigned = allTasks.filter((t) => t.assignee_id);
+  const openAssigned = assigned.filter((t) => t.status !== "done");
+  const busy = clients.filter((c) => openAssigned.some((t) => t.assignee_id === c.id));
+  const days = lastDays(7);
+  $("p-tiles").replaceChildren(
+    ktile("users", COL.mint, "People", clients.length, "on your list"),
+    ktile("bolt", COL.amber, "Busy now", busy.length, `${clients.length - busy.length} free`),
+    ktile("list", COL.blue, "Tasks assigned", openAssigned.length, "still open", days.map((d) => assigned.filter((t) => sameDay(parseTime(t.created_at), d)).length)),
+    ktile("alert", openAssigned.some(isOverdue) ? COL.red : COL.mint, "Overdue", openAssigned.filter(isOverdue).length, "assigned tasks past due"));
+  // ---- member rows ----
+  const list = $("clients");
+  list.replaceChildren();
+  const shown = clients.filter((c) => !q || c.name.toLowerCase().includes(q));
+  if (!clients.length) list.append(el("p", { className: "muted" }, "No people yet. Add your team members (Bilal, Ahmad...), clients or friends below."));
+  else if (!shown.length) list.append(el("p", { className: "muted" }, "Nobody matches that search."));
+  const soon = (t) => (dueMoment(t) || new Date(8.64e15)).getTime();
+  for (const c of shown) {
+    const doing = allTasks.filter((t) => t.assignee_id === c.id), open = doing.filter((t) => t.status !== "done"), late = open.filter(isOverdue);
+    const next = [...open].sort((a, b) => soon(a) - soon(b))[0];
+    const [label, colour] = late.length ? ["Overdue", COL.red] : open.length ? ["Busy", COL.amber] : ["Free", COL.mint];  // instead of Online/Away
+    list.append(el("div", { className: "prow" },
+      el("span", { className: "avatar" }, c.name[0].toUpperCase()),
+      el("div", { className: "body", style: "flex:1;min-width:0" },
+        el("div", { className: "title" }, c.name),
+        el("div", { className: "meta" }, `${open.length} open · ${doing.length - open.length} done` + (late.length ? ` · ${late.length} overdue` : "")),
+        next ? el("div", { className: "meta" }, "Next: " + next.title + (next.due_date ? " — " + dueText(next) : "")) : ""),
+      el("span", { className: "state", style: `color:${colour}` }, el("i", { style: `background:${colour}` }), label),
+      el("button", { className: "chip", title: "Give this person a task", onclick: () => {  // jump to Home with them picked
+        show("home"); $("task-form").classList.remove("hidden"); $("task-who").value = String(c.id); $("task-title").focus();
+      } }, "+ Task"),
+      el("button", { className: "dots", title: "Remove person", onclick: (e) => run(e.target, async () => {
+        if (!confirm(`Remove ${c.name}? Their tasks are kept and come back to you.`)) return;
+        await api(`/clients/${c.id}`, { method: "DELETE" });
+        await refresh();
+      }) }, "✕")));
+  }
+  // ---- team activity: who got / finished what ----
+  const feed = $("team-activity");
+  feed.replaceChildren();
+  const events = [];
+  for (const t of allTasks) {
+    const who = t.assignee_id ? personName(t.assignee_id) : "You";
+    events.push({ at: parseTime(t.created_at), ic: "plus", text: t.assignee_id ? `${who} got a new task` : "You added a task", sub: t.title });
+    if (t.completed_at) events.push({ at: parseTime(t.completed_at), ic: "check", text: `${who} completed a task`, sub: t.title });
+  }
+  events.sort((a, b) => b.at - a.at);
+  if (!events.length) feed.append(el("p", { className: "muted" }, "Nothing yet."));
+  for (const e of events.slice(0, 6)) {
+    const ic = el("span", { className: "feed-ic" + (e.ic === "plus" ? " blue" : "") }); ic.append(icon(ICONS[e.ic]));
+    feed.append(el("div", { className: "feed-row" }, ic, el("div", {}, el("div", {}, e.text), el("div", { className: "meta" }, e.sub)), el("span", { className: "when" }, ago(e.at))));
+  }
+  drawWorkload($("team-bars"));
+}
+function ago(d) {  // "5m ago", "3h ago", "2d ago"
+  const mins = Math.round((Date.now() - d) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+  return `${Math.round(mins / 1440)}d ago`;
+}
+$("people-search").oninput = drawPeople;
 $("client-form").onsubmit = (event) => {
   event.preventDefault();
   run(event.submitter, async () => {
     await api("/clients", { method: "POST", json: { name: $("client-name").value } });
-    $("client-name").value = "";  // empty the box
-    await loadClients();
+    $("client-name").value = "";
+    await refresh();
   });
 };
 
-// ---------- tasks ----------
+// ---------- analytics ----------
 
-async function loadTasks() {
-  const status = $("status-filter").value;  // "" = all
-  const tasks = await api("/tasks" + (status ? `?status=${status}` : ""));  // only MY tasks
-  const list = $("tasks");
-  list.replaceChildren();
-  if (!tasks.length) list.append(el("p", { className: "muted" }, "No tasks here yet."));
-  for (const t of tasks) {
-    const picker = el("select", { onchange: () => run(picker, async () => {  // change status
-      await api(`/tasks/${t.id}`, { method: "PATCH", json: { status: picker.value } });
-      await loadTasks(); await loadClients();  // open-task counts change too
-    }) });
-    for (const [value, label] of [["todo", "To do"], ["in_progress", "In progress"], ["done", "Done"]]) {
-      picker.append(el("option", { value, selected: t.status === value }, label));
+function drawAnalytics() {
+  const n = Number($("range").value), days = lastDays(n);
+  const before = lastDays(2 * n).slice(0, n);  // the period before, to compare with
+  const done = perDay("completed_at", days), added = perDay("created_at", days);
+  const sum = (a) => a.reduce((x, y) => x + y, 0);
+  const doneNow = sum(done), doneBefore = sum(perDay("completed_at", before));
+  const active = days.filter((_, i) => done[i] || added[i]).length;  // days with any activity
+  const total = allTasks.length, finished = allTasks.filter((t) => t.status === "done").length;
+  const rate = total ? Math.round((finished / total) * 100) : 0;
+  const late = allTasks.filter(isOverdue).length;
+  $("a-tiles").replaceChildren(
+    ktile("check", COL.mint, "Tasks completed", doneNow, change(doneNow, doneBefore), done),
+    ktile("list", COL.blue, "Tasks added", sum(added), change(sum(added), sum(perDay("created_at", before))), added),
+    ktile("users", COL.amber, "Active days", `${active} / ${n}`, "with activity", days.map((_, i) => done[i] + added[i])),
+    ktile("star", COL.amber, "Completion rate", `${rate}%`, late ? el("span", { className: "down" }, `${late} overdue`) : el("span", { className: "up" }, "nothing overdue"), rateSeries(days)));
+  drawBars($("bars"), days, done, added);
+  drawDonut();
+  // ---- completion rate card ----
+  const series = rateSeries(days);
+  $("rate-num").textContent = `${rate}%`;
+  const first = series.find((v) => v > 0) ?? 0;
+  $("rate-sub").replaceChildren(el("span", { className: rate >= first ? "up" : "down" }, `${rate >= first ? "↑" : "↓"} ${Math.abs(rate - first)} points over the last ${n} days`), ` · ${finished} of ${total} tasks done`);
+  drawLine($("rate-line"), series);
+  // ---- upcoming deadlines ----
+  const box = $("deadlines");
+  box.replaceChildren();
+  const upcoming = allTasks.filter((t) => t.status !== "done" && t.due_date).sort((a, b) => dueMoment(a) - dueMoment(b)).slice(0, 5);
+  if (!upcoming.length) { box.append(el("p", { className: "muted" }, "No deadlines. Add due dates to your tasks to see them here.")); }
+  else {
+    const tl = el("div", { className: "tl" });
+    upcoming.forEach((t, i) => {
+      const lateT = isOverdue(t), isToday = sameDay(localDay(t.due_date), new Date());
+      const [dayLabel] = dueText(t).split(" • ");
+      tl.append(el("div", { className: "tl-row" + (lateT ? " late" : i === 0 ? " first" : "") },
+        el("span", { className: "day" }, dayLabel), el("span", {}, t.title),
+        el("span", { className: "when-chip" + (lateT ? " late" : isToday ? " today" : "") }, lateT ? "Overdue" : t.due_time ? dueText(t).split(" • ")[1] : dayLabel)));
+    });
+    box.append(tl);
+  }
+  drawWorkload($("person-bars"));
+}
+$("range").onchange = drawAnalytics;
+
+function rateSeries(days) {  // completion rate (%) at the end of each day: finished so far / added so far
+  return days.map((d) => {
+    const end = new Date(d); end.setHours(23, 59, 59, 999);
+    const made = allTasks.filter((t) => parseTime(t.created_at) <= end);
+    const fin = made.filter((t) => t.completed_at && parseTime(t.completed_at) <= end);
+    return made.length ? Math.round((fin.length / made.length) * 100) : 0;
+  });
+}
+
+function drawBars(box, days, done, added) {  // bars = completed per day, line = added per day
+  box.replaceChildren();
+  const W = 640, H = 260, L = 36, B = 30, T = 14, pw = W - L - 10, ph = H - B - T;
+  const top = Math.max(4, Math.ceil(Math.max(...done, ...added) / 4) * 4);  // a round number for the top line
+  const defs = svgEl("defs", {}), grad = svgEl("linearGradient", { id: "barGrad", x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.append(svgEl("stop", { offset: 0, "stop-color": "#5ee8ad" }), svgEl("stop", { offset: 1, "stop-color": "#0f5a3a" }));
+  defs.append(grad); box.append(defs);
+  for (let i = 0; i <= 4; i++) {  // 5 grid lines with numbers
+    const y = T + ph - (i / 4) * ph;
+    box.append(svgEl("line", { x1: L, x2: W - 10, y1: y, y2: y, stroke: "#22312c" }));
+    const label = svgEl("text", { x: L - 8, y: y + 4, "text-anchor": "end", fill: "#8ea39a", "font-size": 12 }); label.textContent = (top / 4) * i; box.append(label);
+  }
+  const slot = pw / days.length, bw = Math.min(40, slot * 0.55);
+  const pts = [];
+  days.forEach((d, i) => {
+    const x = L + slot * i + slot / 2, h = (done[i] / top) * ph;
+    const bar = svgEl("rect", { x: x - bw / 2, y: T + ph - h, width: bw, height: Math.max(h, 0), rx: 6, fill: "url(#barGrad)" });
+    const tip = svgEl("title", {}); tip.textContent = `${d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })}: ${done[i]} completed, ${added[i]} added`;
+    bar.append(tip); box.append(bar);
+    pts.push([x, T + ph - (added[i] / top) * ph]);
+    if (days.length <= 7 || i % 5 === 0 || i === days.length - 1) {  // day names (7 days) or every 5th date (30 days)
+      const lab = svgEl("text", { x, y: H - 8, "text-anchor": "middle", fill: "#c4d2cc", "font-size": 12 });
+      lab.textContent = days.length <= 7 ? d.toLocaleDateString([], { weekday: "short" }) : d.toLocaleDateString([], { month: "short", day: "numeric" });
+      box.append(lab);
     }
-    list.append(el("div", { className: "item" },
-      el("div", { className: "grow" },
-        el("div", { className: t.status === "done" ? "done" : "" }, t.title),
-        t.description ? el("div", { className: "muted" }, t.description) : "",
-        t.client_id ? el("div", { className: "tag" }, "👤 " + clientName(t.client_id)) : ""),
-      picker,
-      el("button", { className: "danger", title: "Delete task", onclick: (e) => run(e.target, async () => {
-        await api(`/tasks/${t.id}`, { method: "DELETE" });
-        await loadTasks(); await loadClients();
-      }) }, "✕")));
+  });
+  box.append(svgEl("polyline", { points: pts.map((p) => p.join(",")).join(" "), fill: "none", stroke: COL.blue, "stroke-width": 2.5, "stroke-linejoin": "round" }));
+  for (const [x, y] of pts) box.append(svgEl("circle", { cx: x, cy: y, r: 3.5, fill: COL.blue }));
+}
+
+function drawLine(box, values) {  // the completion-rate wave (0-100%)
+  box.replaceChildren();
+  const W = 600, H = 140, step = W / Math.max(1, values.length - 1);
+  const pts = values.map((v, i) => [i * step, H - 10 - (v / 100) * (H - 24)]);
+  const line = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const defs = svgEl("defs", {}), grad = svgEl("linearGradient", { id: "rateGrad", x1: 0, y1: 0, x2: 0, y2: 1 });
+  grad.append(svgEl("stop", { offset: 0, "stop-color": COL.mint, "stop-opacity": 0.3 }), svgEl("stop", { offset: 1, "stop-color": COL.mint, "stop-opacity": 0 }));
+  defs.append(grad);
+  box.append(defs, svgEl("path", { d: `${line} L${W} ${H} L0 ${H} Z`, fill: "url(#rateGrad)" }), svgEl("path", { d: line, fill: "none", stroke: COL.mint, "stroke-width": 2.5 }));
+  const [lx, ly] = pts[pts.length - 1];
+  box.append(svgEl("circle", { cx: lx - 4, cy: ly, r: 6, fill: "#e9f2ee", stroke: COL.mint, "stroke-width": 3 }));
+}
+
+function drawDonut() {  // tasks by status, with percentages
+  const total = allTasks.length;
+  const parts = [["done", "Completed", COL.mint], ["in_progress", "In progress", COL.blue], ["todo", "To do", COL.amber]]
+    .map(([value, label, colour]) => ({ label, colour, n: allTasks.filter((t) => t.status === value).length }));
+  const box = $("donut"), legend = $("legend");
+  box.replaceChildren(); legend.replaceChildren();
+  const r = 60, length = 2 * Math.PI * r;
+  box.append(svgEl("circle", { cx: 80, cy: 80, r, fill: "none", stroke: "#26322e", "stroke-width": 18 }));
+  let offset = 0;
+  for (const p of parts) {
+    if (!p.n) continue;
+    const piece = (p.n / total) * length;
+    box.append(svgEl("circle", { cx: 80, cy: 80, r, fill: "none", stroke: p.colour, "stroke-width": 18,
+      "stroke-dasharray": `${piece} ${length - piece}`, "stroke-dashoffset": -offset, transform: "rotate(-90 80 80)" }));
+    offset += piece;
+  }
+  const mid = svgEl("text", { x: 80, y: 82, "text-anchor": "middle", fill: "#e9f2ee", "font-size": 28, "font-weight": 700 }); mid.textContent = total;
+  const sub = svgEl("text", { x: 80, y: 102, "text-anchor": "middle", fill: "#8ea39a", "font-size": 13 }); sub.textContent = "Total";
+  box.append(mid, sub);
+  for (const p of parts) legend.append(el("div", {}, el("span", { className: "swatch", style: `background:${p.colour};border-radius:50%` }), p.label,
+    el("b", {}, `${p.n} (${total ? Math.round((p.n / total) * 100) : 0}%)`)));
+}
+
+function drawWorkload(bars) {  // one bar per person: open (blue) + done (mint)
+  bars.replaceChildren();
+  const rows = clients.map((c) => ({ name: c.name, tasks: allTasks.filter((t) => t.assignee_id === c.id) }));
+  const mine = allTasks.filter((t) => !t.assignee_id);
+  if (mine.length) rows.push({ name: "Me", tasks: mine });
+  rows.sort((a, b) => b.tasks.length - a.tasks.length);
+  const most = Math.max(1, ...rows.map((x) => x.tasks.length));
+  if (!rows.length) bars.append(el("p", { className: "muted" }, "Add people and tasks to see this chart."));
+  for (const row of rows.slice(0, 8)) {
+    const fin = row.tasks.filter((t) => t.status === "done").length, open = row.tasks.length - fin;
+    bars.append(el("div", { className: "cbar" },
+      el("div", { className: "row1" }, row.name, el("span", { className: "muted" }, `${open} open · ${fin} done`)),
+      el("div", { className: "track" }, el("i", { style: `width:${(open / most) * 100}%;background:${COL.blue}` }), el("i", { style: `width:${(fin / most) * 100}%;background:${COL.mint}` }))));
   }
 }
 
-$("status-filter").onchange = () => run(null, loadTasks);
+// ---------- settings ----------
 
-$("task-form").onsubmit = (event) => {  // add a task by hand
+$("name-form").onsubmit = (event) => {
   event.preventDefault();
-  run(event.submitter, async () => {
-    await api("/tasks", { method: "POST", json: { title: $("task-title").value } });
-    $("task-title").value = "";
-    await loadTasks(); await loadClients();
-  });
+  store("taskmint_name_" + email, $("display-name").value.trim());  // kept in this browser only
+  drawAll();
+  toast("Saved.");
 };
 
 // ---------- the AI planner ----------
 
-function showProposals() {  // draw the AI's suggestions with tick boxes
+const box = $("message");
+box.addEventListener("input", () => { box.style.height = "auto"; box.style.height = box.scrollHeight + "px"; });  // grow with the text
+box.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("propose-btn").click(); } });  // Enter = send, Shift+Enter = new line
+for (const chip of document.querySelectorAll("[data-example]")) chip.onclick = () => { box.value = chip.dataset.example; box.dispatchEvent(new Event("input")); box.focus(); };
+
+function drawProposals() {
   const list = $("proposals");
   list.replaceChildren();
-  proposals.forEach((p, i) => {
-    list.append(el("label", { className: "item" },
-      el("input", { type: "checkbox", checked: true, onchange: (e) => { p.keep = e.target.checked; } }),  // ticked by default
-      el("div", { className: "grow" },
-        el("div", {}, p.title),
-        p.description ? el("div", { className: "muted" }, p.description) : "",
-        el("div", { className: "quote" }, `“${p.source_quote}”`),  // the client's exact words: the proof
-        p.client_id ? el("div", { className: "tag" }, "👤 " + clientName(p.client_id)) : "")));
-  });
-  $("approve-row").classList.toggle("hidden", !proposals.length);  // only show Save when there's something
+  for (const p of proposals) {
+    const tick = el("button", { className: "tick", type: "button", title: "Keep or skip" });
+    const row = el("div", { className: "task" + (p.keep ? " is-done" : "") });
+    const paint = () => { row.classList.toggle("is-done", p.keep); tick.replaceChildren(...(p.keep ? [icon(CHECK)] : [])); };
+    tick.onclick = () => { p.keep = !p.keep; paint(); };
+    const body = el("div", { className: "body" }, el("div", {}, p.title),
+      p.description ? el("div", { className: "meta" }, p.description) : "",
+      dueLine(p) || "",  // "Tomorrow • 8:00 PM"
+      p.client_id ? el("div", { className: "meta" }, "from " + personName(p.client_id)) : "",
+      el("div", { className: "quote" }, `“${p.source_quote}”`));  // the exact words it came from: the proof
+    row.append(tick, body, tagFor(p));
+    paint();
+    row.querySelector(".body > div").style.textDecoration = "none";  // ticked = keep, so no strike-through here
+    list.append(row);
+  }
+  $("approve-row").classList.toggle("hidden", !proposals.length);
 }
-
-$("propose-btn").onclick = (event) => run(event.target, async () => {
-  const message = $("message").value.trim();
-  if (!message) { toast("Paste a message first.", true); return; }  // don't waste an AI credit
+$("propose-btn").onclick = (event) => run(event.currentTarget, async () => {
+  const message = box.value.trim();
+  if (!message) { toast("Type or paste something first.", true); return; }  // don't waste an AI credit
   $("propose-info").textContent = "Thinking…";
   try {
     const plan = await api("/planner/propose", { method: "POST", json: { message } });  // uses 1 AI credit
     proposals = plan.tasks.map((t) => ({ ...t, keep: true }));
-    $("propose-info").textContent = proposals.length ? (plan.dropped ? `${plan.dropped} made-up suggestion(s) removed` : "") : "No tasks found in this message.";
-    showProposals();
+    const removed = plan.dropped ? `${plan.dropped} suggestion(s) removed: their quote wasn't in the message` : "";
+    $("propose-info").textContent = proposals.length ? (removed || "Tick the ones you want, then save.") : (removed || "No tasks found in this message.");
+    drawProposals();
   } finally {
-    await loadUsage().catch(() => {});  // credit count changed (even if the AI failed)
+    await refreshUsage().catch(() => {});  // credits changed, even if the AI failed
     if ($("propose-info").textContent === "Thinking…") $("propose-info").textContent = "";
   }
 });
-
 $("approve-btn").onclick = (event) => run(event.target, async () => {
-  const chosen = proposals.filter((p) => p.keep).map(({ title, description, client_id }) => ({ title, description, client_id }));  // only the fields approve accepts
+  const chosen = proposals.filter((p) => p.keep).map(({ title, description, client_id, assignee_id, due_date, due_time }) => ({ title, description, client_id, assignee_id, due_date, due_time }));  // only the fields approve accepts
   if (!chosen.length) { toast("Tick at least one task.", true); return; }
   await api("/planner/approve", { method: "POST", json: { tasks: chosen } });  // all or nothing
   toast(`Saved ${chosen.length} task${chosen.length === 1 ? "" : "s"}.`);
-  proposals = []; showProposals(); $("message").value = ""; $("propose-info").textContent = "";
-  await loadTasks(); await loadClients();
+  proposals = []; drawProposals(); box.value = ""; box.style.height = "auto"; $("propose-info").textContent = "";
+  await refresh();
 });
-
-$("discard-btn").onclick = () => { proposals = []; showProposals(); $("propose-info").textContent = ""; };
+$("discard-btn").onclick = () => { proposals = []; drawProposals(); $("propose-info").textContent = ""; };
 
 // ---------- go ----------
 if (token) run(null, start);  // a saved token from this tab? try it (logs out if it expired)
