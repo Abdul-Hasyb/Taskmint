@@ -1,6 +1,6 @@
-from datetime import datetime, timezone  # tools for working with dates and times
+from datetime import date, datetime, timezone  # tools for working with dates and times (date = just a day, no time)
 
-from sqlalchemy import DateTime, ForeignKey, String  # column types, and ForeignKey = "this column points at another table"
+from sqlalchemy import Date, DateTime, ForeignKey, String, UniqueConstraint  # column types; ForeignKey = "points at another table"; UniqueConstraint = "no two rows with the same values"
 from sqlalchemy.orm import Mapped, mapped_column  # tools for describing a table's columns
 
 from app.database import Base  # the parent class every table inherits from
@@ -42,3 +42,13 @@ class Task(Base):  # one row in the "tasks" table = one task
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)  # set automatically on insert
     client_id: Mapped[int | None] = mapped_column(ForeignKey("clients.id"), index=True)  # which client this task is for (optional)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # whose task this is (required)
+
+
+class AIUsage(Base):  # one row in the "ai_usage" table = how many AI requests one user made on one day
+    __tablename__ = "ai_usage"  # the table's name inside the database
+    __table_args__ = (UniqueConstraint("user_id", "day"), {"sqlite_autoincrement": True})  # only ONE counter row per user per day
+
+    id: Mapped[int] = mapped_column(primary_key=True)  # unique number, picked by the database
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # whose counter this is
+    day: Mapped[date] = mapped_column(Date)  # which day (UTC) the counter is for
+    count: Mapped[int] = mapped_column(default=0)  # how many AI requests so far that day
