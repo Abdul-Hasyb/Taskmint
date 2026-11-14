@@ -1,21 +1,13 @@
-from contextlib import asynccontextmanager  # lets us run code when the app starts and stops
-
 from fastapi import Depends, FastAPI, HTTPException, status  # FastAPI tools; Depends = "give me this for each request"
 from sqlalchemy import select  # builds SELECT queries ("read rows from a table")
 from sqlalchemy.orm import Session  # the type of a database conversation
 
-from app.database import Base, engine, get_db  # our database connection and helpers
+from app.database import get_db  # hands each request its own database session
 from app.models import Task  # the tasks TABLE
 from app.schemas import TaskCreate, TaskRead, TaskUpdate  # what users send and what we send back
 
 
-@asynccontextmanager  # turns the function below into a start-up/shut-down handler
-async def lifespan(app: FastAPI):  # runs once when the server starts
-    Base.metadata.create_all(engine)  # create any tables that don't exist yet (existing ones are left alone)
-    yield  # the app runs while we're paused here
-
-
-app = FastAPI(title="Taskmint", version="0.2.0", lifespan=lifespan)  # create the app; version bumped for the database
+app = FastAPI(title="Taskmint", version="0.2.0")  # create the app; tables are now created by Alembic migrations, not here
 
 
 def find_task_or_404(db: Session, task_id: int) -> Task:  # shared helper: get a task or send 404
