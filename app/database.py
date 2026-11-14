@@ -1,7 +1,7 @@
 import os  # lets Python read environment variables
 
 from dotenv import load_dotenv  # reads the .env file into environment variables
-from sqlalchemy import create_engine, text  # create_engine = the connection to the database; text = raw SQL
+from sqlalchemy import MetaData, create_engine, text  # create_engine = the connection to the database; text = raw SQL; MetaData = table settings
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker  # tools for tables and conversations with the database
 from sqlalchemy.pool import StaticPool  # keeps ONE shared connection (needed for the tests' in-memory database)
 
@@ -23,8 +23,17 @@ else:  # the real database (Supabase PostgreSQL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False)  # a factory that makes one "conversation" with the database
 
 
+NAMING_CONVENTION = {  # gives every index and link between tables a predictable name, so migrations can find and change them later
+    "ix": "ix_%(column_0_label)s",  # indexes: ix_tasks_client_id
+    "uq": "uq_%(table_name)s_%(column_0_name)s",  # unique rules
+    "ck": "ck_%(table_name)s_%(constraint_name)s",  # check rules
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",  # foreign keys: fk_tasks_client_id_clients
+    "pk": "pk_%(table_name)s",  # primary keys
+}
+
+
 class Base(DeclarativeBase):  # every table class will inherit from this
-    pass  # nothing extra needed
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)  # use the naming rules above
 
 
 def get_db():  # FastAPI calls this for every request that needs the database
