@@ -56,3 +56,15 @@ class AIUsage(Base):  # one row in the "ai_usage" table = how many AI requests o
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # whose counter this is
     day: Mapped[date] = mapped_column(Date)  # which day (UTC) the counter is for
     count: Mapped[int] = mapped_column(default=0)  # how many AI requests so far that day
+
+
+class Reminder(Base):  # one row = one reminder to show for one task at one moment
+    __tablename__ = "reminders"  # the table's name inside the database
+    __table_args__ = {"sqlite_autoincrement": True}  # never reuse ids
+
+    id: Mapped[int] = mapped_column(primary_key=True)  # unique number, picked by the database
+    task_id: Mapped[int] = mapped_column(ForeignKey("tasks.id"), index=True)  # which task it's about
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)  # who gets it (the task's owner)
+    kind: Mapped[str] = mapped_column(String(20))  # before / at / after / morning / afternoon / evening
+    send_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)  # when to show it (UTC)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # when it was handed to the browser, or None = not yet

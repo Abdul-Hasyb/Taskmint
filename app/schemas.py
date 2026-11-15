@@ -136,3 +136,22 @@ class UserRead(BaseModel):  # what the API SENDS BACK about a user (never the pa
 class Token(BaseModel):  # what /auth/login SENDS BACK
     access_token: str  # the signed login token
     token_type: str = "bearer"  # tells the client to send it as "Authorization: Bearer <token>"
+
+
+class ReminderOut(BaseModel):  # a reminder that is due NOW (what the browser pops up)
+    task_id: int  # which task
+    kind: str  # before / at / after / morning / afternoon / evening
+    title: str  # the task's title
+    message: str  # ready-to-show text, e.g. "⏰ Gym at 8:00 PM, in 1 hour"
+
+
+class ReminderUpcoming(BaseModel):  # a reminder still waiting (shown as 🔔 on tasks)
+    task_id: int  # which task
+    kind: str  # which of the 3
+    send_at: datetime  # when it will pop up (UTC)
+
+
+class SnoozeRequest(BaseModel):  # what POST /reminders/snooze RECEIVES
+    model_config = STRICT  # no unknown fields
+    task_id: int  # which task
+    minutes: int = Field(default=10, ge=5, le=240)  # remind again in 5 minutes to 4 hours (no spam, no forever)

@@ -280,6 +280,33 @@
     .state i { width: 9px; height: 9px; border-radius: 50%; }
     .dashed { border: 1px dashed var(--line); border-radius: 12px; padding: 10px; margin-top: 12px; }
 
+    /* ---- reminders ---- */
+    #pops { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 20; width: min(430px, calc(100vw - 40px)); }
+    .pop { position: relative; display: flex; gap: 14px; background: linear-gradient(160deg, #15291f, #0f1a16); border: 1px solid #2c8a63;
+      border-left: 4px solid var(--accent, var(--mint)); border-radius: 16px; padding: 16px 16px 14px; box-shadow: 0 18px 44px #000b, 0 0 0 1px #3ddc9714; animation: popin .3s ease-out; overflow: hidden; }
+    @keyframes popin { from { transform: translateX(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .pop.leaving { animation: popout .2s ease-in forwards; }
+    @keyframes popout { to { transform: translateX(30px); opacity: 0; } }
+    .pop-icon { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 24px; flex: none; background: color-mix(in srgb, var(--accent, var(--mint)) 18%, transparent); }
+    .pop-body { flex: 1; min-width: 0; }
+    .pop-label { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent, var(--mint)); }
+    .pop-title { font-size: 18px; font-weight: 700; margin: 3px 0 2px; overflow-wrap: anywhere; }
+    .pop-sub { color: #b9cac3; font-size: 14px; }
+    .pop-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .pop-actions button { border-radius: 10px; padding: 7px 12px; font-size: 14px; font-weight: 600; }
+    .pop-actions .ok { background: var(--mint); color: #062015; }
+    .pop-actions .soft { border: 1px solid var(--line); color: var(--text); }
+    .pop-actions .soft:hover { border-color: var(--accent, var(--mint)); }
+    .pop-x { position: absolute; top: 8px; right: 10px; color: var(--muted); font-size: 18px; width: 28px; height: 28px; border-radius: 8px; }
+    .pop-x:hover { background: var(--hover); color: var(--text); }
+    .pop-timer { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent, var(--mint)); opacity: .6; animation: drain 60s linear forwards; }
+    @keyframes drain { from { width: 100%; } to { width: 0; } }
+    .bell-banner { display: flex; align-items: center; gap: 14px; border: 1px dashed #2c6b52; border-radius: 14px; padding: 12px 16px; margin-bottom: 18px; background: #0f1d18; }
+    .bell-banner .grow { flex: 1; }
+    .bell-chip { color: var(--amber); }
+    .switch-row { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+    .switch-row input { width: 18px; height: 18px; accent-color: var(--mint); }
+
     /* ---- phones and small laptops ---- */
     @media (max-width: 1100px) { .home, .cal-layout, .two, .two.wide-left { grid-template-columns: 1fr; } .tiles.four, .ktiles.four { grid-template-columns: 1fr 1fr; } }
     @media (max-width: 760px) { .ktiles.three, .ktiles.four { grid-template-columns: 1fr; } .search { min-width: 0; width: 100%; } .mcell { min-height: 64px; padding: 4px; } .mchip { display: none; } .tl-row .day { width: 70px; } }
@@ -381,6 +408,14 @@
 
       <div class="home">
         <div>
+          <!-- ---- ask once to allow pop-ups ---- -->
+          <div class="bell-banner hidden" id="bell-banner">
+            <span style="font-size:24px">🔔</span>
+            <div class="grow"><b>Turn on reminders</b><div class="muted" style="font-size:14px">Taskmint can ping you before, at and after each task's time.</div></div>
+            <button class="btn" id="bell-on">Turn on</button>
+            <button class="dots" id="bell-later" title="Not now">✕</button>
+          </div>
+
           <!-- ---- the AI box ---- -->
           <div class="card ask">
             <div class="ask-box">
@@ -544,12 +579,21 @@
         <label class="muted" for="display-name">Name to greet you with</label>
         <form class="add-row" id="name-form"><input class="field" id="display-name" maxlength="40" placeholder="e.g. Haseeb"><button class="btn" type="submit">Save</button></form>
         <p class="muted" id="usage-text"></p>
+        <h2 style="margin:22px 0 4px">🔔 Reminders</h2>
+        <p class="muted" style="margin:0 0 6px">With a time: 1 hour before, at the time, and 1 hour after if it's not done. With only a day: 9 AM, 2 PM and 8 PM. Nothing between 11 PM and 8 AM. Taskmint must be open in a tab for now.</p>
+        <p id="notify-status" class="muted"></p>
+        <div class="add-row" style="flex-wrap:wrap">
+          <button class="btn" id="notify-btn">Allow pop-up notifications</button>
+          <button class="btn ghost" id="test-reminder">Send a test reminder</button>
+        </div>
+        <label class="switch-row"><input type="checkbox" id="sound-on" checked> Play a sound</label>
         <button class="btn ghost" id="logout-btn">Log out</button>
       </div>
     </section>
   </main>
 </div>
 <div id="toast" class="hidden"></div>  <!-- small pop-up messages -->
+<div id="pops" aria-live="polite"></div>  <!-- reminder cards stack here -->
 
 <script>
 // =====================================================================
@@ -564,6 +608,7 @@ const $ = (id) => document.getElementById(id);  // shortcut: $("tasks") = the el
 let token = sessionStorage.getItem("taskmint_token");  // the login wristband; forgotten when the tab closes
 let email = "";  // who is logged in
 let clients = [], allTasks = [], proposals = [], usage = null;  // data from the API
+let nextReminder = {};  // task id -> its next reminder moment (for the 🔔 on tasks)
 let calMonth = firstOfMonth(new Date());  // which month the calendars show
 let pickedDay = null;  // the day clicked in the big calendar
 const STATUS = [["todo", "To do", "var(--blue)"], ["in_progress", "In progress", "var(--amber)"], ["done", "Done", "var(--mint)"]];  // [value, label, colour]
@@ -686,6 +731,8 @@ async function login(mail, password) {
 }
 function logout() {
   token = null;
+  clearInterval(reminderTimer);  // no reminders when logged out
+  $("pops").replaceChildren();
   sessionStorage.removeItem("taskmint_token");
   $("app-view").classList.add("hidden");
   $("auth-view").classList.remove("hidden");
@@ -739,9 +786,13 @@ async function start() {
   $("app-view").classList.remove("hidden");
   show("home");
   await refresh();
+  startReminders();  // check every minute from now on
 }
 async function refresh() {  // reload all data, then redraw everything
-  [clients, allTasks, usage] = await Promise.all([api("/clients"), api("/tasks"), api("/planner/usage")]);
+  let upcoming;
+  [clients, allTasks, usage, upcoming] = await Promise.all([api("/clients"), api("/tasks"), api("/planner/usage"), api("/reminders/upcoming")]);
+  nextReminder = {};
+  for (const r of upcoming) if (!(r.task_id in nextReminder)) nextReminder[r.task_id] = parseTime(r.send_at);  // already sorted: first = soonest
   drawAll();
 }
 async function refreshUsage() { usage = await api("/planner/usage"); drawStats(); }
@@ -771,6 +822,7 @@ function taskRow(t) {  // one task: tick circle, title, time, tag, ⋮ menu
   if (t.status === "done") tick.append(icon(CHECK));
   const meta = t.due_date ? dueLine(t) : el("div", { className: "meta" }, "Added " + when(t.created_at));  // due time if it has one
   if (t.client_id) meta.append(el("span", {}, " • from " + personName(t.client_id)));  // who asked for it
+  if (nextReminder[t.id] && t.status !== "done") meta.append(el("span", { className: "bell-chip", title: "Next reminder" }, " • 🔔 " + when(nextReminder[t.id].toISOString())));
   if (t.status === "in_progress") meta.append(el("span", { className: "badge-doing" }, " • In progress"));
   const body = el("div", { className: "body" }, el("div", { className: "title" }, t.title),
     t.description ? el("div", { className: "meta" }, t.description) : "", meta);
@@ -1287,6 +1339,128 @@ $("approve-btn").onclick = (event) => run(event.target, async () => {
   await refresh();
 });
 $("discard-btn").onclick = () => { proposals = []; drawProposals(); $("propose-info").textContent = ""; };
+
+// ---------- reminders ----------
+
+let reminderTimer = null;
+function soundOn() { return load("taskmint_sound") !== "off"; }
+function beep() {  // a soft two-note chime, made in code (no sound file needed)
+  if (!soundOn()) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [[880, 0], [1320, 0.18]].forEach(([freq, at]) => {
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.frequency.value = freq; osc.type = "sine";
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.35);
+      osc.connect(gain).connect(ctx.destination); osc.start(ctx.currentTime + at); osc.stop(ctx.currentTime + at + 0.4);
+    });
+  } catch {}  // some browsers block sound until you click the page once
+}
+const KINDS = {  // how each kind of reminder looks: [emoji, label, colour, subtitle]
+  before: ["⏰", "Coming up · in 1 hour", "#6b8af0", (t) => `Due at ${t}`],
+  at: ["🔔", "It's time", "#3ddc97", (t) => `Due now · ${t}`],
+  after: ["❓", "Check-in", "#f5b94a", (t) => `Did you finish it? It was due at ${t}`],
+  morning: ["☀️", "Today", "#f5b94a", () => "On your list for today"],
+  afternoon: ["🌤️", "Afternoon reminder", "#6b8af0", () => "Still to do today"],
+  evening: ["🌙", "Last call today", "#a98bf5", () => "Finish it, or move it to tomorrow"],
+  snooze: ["🔁", "Snoozed reminder", "#3ddc97", (t) => (t ? `Due at ${t}` : "You asked me to remind you")],
+  test: ["🔔", "Test reminder", "#3ddc97", () => "This is how your reminders will look"],
+};
+let logoIcon = null;
+function logo() {  // the Taskmint leaf as a picture, drawn once in code (for system notifications)
+  if (logoIcon) return logoIcon;
+  try {
+    const c = document.createElement("canvas"); c.width = c.height = 128;
+    const g = c.getContext("2d");
+    g.fillStyle = "#0f1a16"; g.beginPath(); g.roundRect(0, 0, 128, 128, 28); g.fill();  // dark rounded square
+    g.translate(16, 16); g.scale(4, 4); g.strokeStyle = "#3ddc97"; g.lineWidth = 2; g.lineCap = g.lineJoin = "round";
+    g.stroke(new Path2D("M11 20A7 7 0 0 1 4 13c0-5 4-9 16-9 0 12-4 16-9 16z")); g.stroke(new Path2D("M4 21c4-4 7-7 11-10"));  // the leaf
+    logoIcon = c.toDataURL("image/png");
+  } catch { logoIcon = ""; }
+  return logoIcon;
+}
+function showReminder(r) {  // a card on the page + a system notification
+  const task = allTasks.find((t) => t.id === r.task_id);
+  const time = task && task.due_time ? dueMoment(task).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+  const [emoji, label, colour, sub] = KINDS[r.kind] || KINDS.at;
+  const title = task ? task.title : r.title || "Your task";
+  if (r.task_id) document.querySelectorAll(`.pop[data-task="${r.task_id}"]`).forEach((old) => old.remove());  // a newer reminder replaces the old card
+  const card = el("div", { className: "pop", style: `--accent:${colour}` });
+  card.dataset.task = r.task_id;
+  const close = () => { card.classList.add("leaving"); setTimeout(() => card.remove(), 200); };
+  const actions = el("div", { className: "pop-actions" });
+  if (r.task_id) {
+    actions.append(
+      el("button", { className: "ok", onclick: (e) => run(e.target, async () => {  // tick it done straight from the reminder
+        await api(`/tasks/${r.task_id}`, { method: "PATCH", json: { status: "done" } }); close(); toast("Nice, marked as done ✓"); await refresh();
+      }) }, "✓ Done"),
+      el("button", { className: "soft", onclick: (e) => run(e.target, async () => {  // remind me again in 10 minutes
+        await api("/reminders/snooze", { method: "POST", json: { task_id: r.task_id, minutes: 10 } }); close(); toast("OK, I'll remind you in 10 minutes 🔁"); await refresh();
+      }) }, "⏱ Snooze 10 min"));
+  }
+  actions.append(el("button", { className: "soft", onclick: close }, "Dismiss"));
+  card.append(
+    el("span", { className: "pop-icon" }, emoji),
+    el("div", { className: "pop-body" }, el("div", { className: "pop-label" }, label), el("div", { className: "pop-title" }, title), el("div", { className: "pop-sub" }, sub(time)), actions),
+    el("button", { className: "pop-x", title: "Close", onclick: close }, "✕"),
+    el("span", { className: "pop-timer" }));
+  $("pops").append(card);
+  setTimeout(() => { if (card.isConnected) close(); }, 60 * 1000);  // the bar drains; the card leaves after a minute (the system notification stays)
+  beep();
+  if ("Notification" in window && Notification.permission === "granted") {  // Windows / phone notification
+    try {
+      const n = new Notification(`${emoji} ${title}`, {  // e.g. "⏰ Gym"
+        body: `${label} · ${sub(time)}\nClick to open Taskmint`,  // e.g. "Coming up · in 1 hour · Due at 8:00 PM"
+        icon: logo(), badge: logo(),  // the Taskmint leaf
+        tag: `taskmint-${r.task_id}-${r.kind}`,  // never two of the same
+        silent: soundOn(),  // our own chime already plays
+        requireInteraction: r.kind === "at" || r.kind === "after",  // the important ones stay until you close them
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch {}
+  }
+}
+async function checkReminders() {  // ask the server: anything due right now?
+  if (!token) return;
+  try {
+    const due = await api("/reminders/due");
+    due.forEach(showReminder);
+    if (due.length) await refresh();  // the 🔔 times move on
+  } catch {}  // offline for a moment: try again next minute
+}
+function startReminders() {
+  clearInterval(reminderTimer);
+  reminderTimer = setInterval(checkReminders, 60 * 1000);  // every minute
+  checkReminders();  // and once right now
+  drawNotifyStatus();
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkReminders(); });  // coming back to the tab: check at once
+
+function drawNotifyStatus() {  // the banner on Home + the line in Settings
+  const supported = "Notification" in window, state = supported ? Notification.permission : "unsupported";
+  $("notify-status").textContent = {
+    granted: "✅ Pop-up notifications are on for this browser.",
+    denied: "🚫 Notifications are blocked. Allow them in the browser's site settings (the 🔒 next to the address), then reload.",
+    default: "Notifications are off. Reminders will still show inside Taskmint.",
+    unsupported: "This browser can't show notifications. Reminders will show inside Taskmint.",
+  }[state];
+  $("notify-btn").classList.toggle("hidden", state !== "default");
+  $("bell-banner").classList.toggle("hidden", state !== "default" || load("taskmint_bell_later") === "1");
+  $("sound-on").checked = soundOn();
+}
+async function askNotify() {
+  if (!("Notification" in window)) return;
+  await Notification.requestPermission();  // the browser asks "Allow notifications?"
+  drawNotifyStatus();
+  if (Notification.permission === "granted") toast("Reminders are on 🔔");
+}
+$("notify-btn").onclick = askNotify;
+$("bell-on").onclick = askNotify;
+$("bell-later").onclick = () => { store("taskmint_bell_later", "1"); drawNotifyStatus(); };
+$("sound-on").onchange = () => store("taskmint_sound", $("sound-on").checked ? "on" : "off");
+$("test-reminder").onclick = () => showReminder({ task_id: 0, kind: "test", title: "Go to the gym" });
 
 // ---------- go ----------
 if (token) run(null, start);  // a saved token from this tab? try it (logs out if it expired)

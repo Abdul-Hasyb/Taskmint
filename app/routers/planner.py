@@ -10,6 +10,7 @@ from app import ai  # our Gemini helper (used as ai.ask_ai, so tests can swap it
 from app.clock import local_today  # today on the users' clock
 from app.database import get_db  # hands each request its own database session
 from app.models import AIUsage, Client, Task, User  # the AI-usage, clients, tasks and users TABLES
+from app.routers.reminders import plan_reminders  # the 3-reminders rules
 from app.routers.tasks import check_client_exists  # reuse: a task can only point at a real client
 from app.schemas import ApproveRequest, PlanRequest, PlanResponse, ProposedTask, TaskRead  # the forms
 from app.security import get_current_user  # "who is logged in?" (401 if nobody)
@@ -103,4 +104,6 @@ def approve(request: ApproveRequest, db: Session = Depends(get_db), user: User =
     db.commit()  # save them together: all or nothing
     for task in tasks:  # reload each one...
         db.refresh(task)  # ...to get its id and created_at
-    return [TaskRead.model_validate(task) for task in tasks]  # send them back
+        plan_reminders(db, task)  # its 3 reminders
+    db.commit()  # save the reminders
+    return [TaskRead.model_validate(task) for task in tasks]  # send them back

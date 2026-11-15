@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session  # the type of a database conversation
 
 from app.database import get_db  # hands each request its own database session
 from app.models import Client, Task, User, utc_now  # the tasks, clients and users TABLES; utc_now = the time right now
+from app.routers.reminders import delete_reminders, plan_reminders  # the 3-reminders rules
 from app.schemas import TaskCreate, TaskRead, TaskStatus, TaskUpdate  # what users send and what we send back
 from app.security import get_current_user  # "who is logged in?" (401 if nobody)
 
@@ -32,6 +33,8 @@ def create_task(task_in: TaskCreate, db: Session = Depends(get_db), user: User =
     db.add(task)  # put it in the "to save" pile
     db.commit()  # save it permanently
     db.refresh(task)  # reload it to get the id and created_at
+    plan_reminders(db, task)  # its 3 reminders
+    db.commit()  # save them
     return TaskRead.model_validate(task)  # send it back
 
 
@@ -77,6 +80,7 @@ def update_task(task_id: int, changes: TaskUpdate, db: Session = Depends(get_db)
         task.due_time = None  # then the time goes too
     if task.due_time is not None and task.due_date is None:  # a time but no day?
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="due_time needs a due_date")  # nothing saved
+    plan_reminders(db, task)  # new time or ticked done? re-plan (done = no more reminders)
     db.commit()  # save the changes
     db.refresh(task)  # reload the saved version
     return TaskRead.model_validate(task)  # send it back
@@ -85,5 +89,6 @@ def update_task(task_id: int, changes: TaskUpdate, db: Session = Depends(get_db)
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)  # DELETE /tasks/5 removes task 5 (only if it's mine)
 def delete_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> None:
     task = find_task_or_404(db, task_id, user)  # find it (or 404)
+    delete_reminders(db, task.id)  # its reminders go first (they point at it)
     db.delete(task)  # mark it for deletion
     db.commit()  # delete it permanently
