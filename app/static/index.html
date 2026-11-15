@@ -67,7 +67,8 @@
     /* ---- task rows ---- */
     .task { display: flex; align-items: center; gap: 16px; padding: 18px 4px; border-top: 1px solid var(--line); position: relative; }
     .task:first-of-type { border-top: 0; }
-    .tick { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #8ea39a; display: grid; place-items: center; flex: none; }
+    .tick { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #8ea39a; display: grid; place-items: center; flex: none; padding: 0; transition: background .15s, border-color .15s; }  /* padding 0: browsers pad buttons, which pushed the ✓ off-centre */
+    .tick svg.icon { width: 15px; height: 15px; display: block; stroke-width: 3; }
     .tick:hover { border-color: var(--mint); }
     .task.is-done .tick { background: var(--mint); border-color: var(--mint); }
     .task.is-done .tick svg { stroke: #062015; }
@@ -225,7 +226,7 @@
     #day-form { flex-wrap: wrap; }
     #day-form #day-task { flex: 1 1 100%; }
     #day-form #day-time { flex: 1 !important; }
-    .crow .tick svg.icon { width: 14px; height: 14px; }
+    .crow .tick svg.icon { width: 12px; height: 12px; }
     .tl-row .day { text-align: left; }
     .tl-row > span:nth-child(2) { flex: 1; min-width: 0; }
     .two.wide-left { grid-template-columns: 1.6fr 1fr; }
@@ -279,6 +280,14 @@
     .state { font-size: 14px; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
     .state i { width: 9px; height: 9px; border-radius: 50%; }
     .dashed { border: 1px dashed var(--line); border-radius: 12px; padding: 10px; margin-top: 12px; }
+
+    /* ---- Chrome autofill: keep our dark colours instead of Chrome's light-blue box ---- */
+    input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus {
+      -webkit-text-fill-color: var(--text);  /* our light text */
+      -webkit-box-shadow: 0 0 0 1000px #0a1210 inset;  /* paint our dark background over Chrome's */
+      caret-color: var(--text);  /* the blinking cursor stays visible */
+      transition: background-color 99999s;  /* stop Chrome's colour from ever showing */
+    }
 
     /* ---- reminders ---- */
     #pops { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 20; width: min(430px, calc(100vw - 40px)); }
@@ -587,6 +596,10 @@
           <button class="btn ghost" id="test-reminder">Send a test reminder</button>
         </div>
         <label class="switch-row"><input type="checkbox" id="sound-on" checked> Play a sound</label>
+        <h2 style="margin:22px 0 4px">📧 Email reminders</h2>
+        <label class="switch-row"><input type="checkbox" id="email-on"> Email me reminders at&nbsp;<b id="email-addr"></b></label>
+        <p class="muted" style="margin:0 0 10px">The same reminders, in your inbox, even when Taskmint isn't open. At most 20 a day. The first one may land in Spam: mark it "Not spam".</p>
+        <button class="btn ghost" id="test-email">Send a test email</button>
         <button class="btn ghost" id="logout-btn">Log out</button>
       </div>
     </section>
@@ -781,7 +794,10 @@ for (const button of document.querySelectorAll("[data-view]")) button.onclick = 
 // ---------- loading everything ----------
 
 async function start() {
-  email = (await api("/auth/me")).email;  // also checks the token still works
+  const me = await api("/auth/me");  // also checks the token still works
+  email = me.email;
+  $("email-on").checked = me.email_reminders;  // the "email me reminders" switch
+  $("email-addr").textContent = me.email;
   $("auth-view").classList.add("hidden");
   $("app-view").classList.remove("hidden");
   show("home");
@@ -856,9 +872,19 @@ function openMenu(row, t) {  // the small ⋮ menu
 function closeMenus() { document.querySelectorAll(".menu").forEach((m) => m.remove()); }
 document.addEventListener("click", closeMenus);  // click anywhere else = close the menu
 
-async function setStatus(t, status) {
-  await api(`/tasks/${t.id}`, { method: "PATCH", json: { status } });
-  await refresh();
+async function setStatus(t, status) {  // "optimistic": show the change at once, save in the background
+  const before = { status: t.status, completed_at: t.completed_at };  // remember, in case saving fails
+  t.status = status;
+  t.completed_at = status === "done" ? new Date().toISOString() : null;
+  drawAll();  // the tick appears immediately
+  try {
+    Object.assign(t, await api(`/tasks/${t.id}`, { method: "PATCH", json: { status } }));  // save it (the slow part: server + Supabase)
+  } catch (error) {
+    Object.assign(t, before);  // saving failed: put it back how it was...
+    drawAll();
+    throw error;  // ...and show the error message
+  }
+  refresh().catch(() => {});  // quietly reload the rest (reminder times, counts) without making you wait
 }
 function drawTasks() {
   const order = { in_progress: 0, todo: 1, done: 2 };  // doing first, done last
@@ -1460,6 +1486,15 @@ $("notify-btn").onclick = askNotify;
 $("bell-on").onclick = askNotify;
 $("bell-later").onclick = () => { store("taskmint_bell_later", "1"); drawNotifyStatus(); };
 $("sound-on").onchange = () => store("taskmint_sound", $("sound-on").checked ? "on" : "off");
+$("email-on").onchange = () => run($("email-on"), async () => {  // flip the email switch on the server
+  const me = await api("/auth/me", { method: "PATCH", json: { email_reminders: $("email-on").checked } });
+  $("email-on").checked = me.email_reminders;
+  toast(me.email_reminders ? "Reminder emails are on 📧" : "Reminder emails are off");
+}).catch(() => {});
+$("test-email").onclick = (e) => run(e.target, async () => {
+  const r = await api("/auth/me/test-email", { method: "POST" });
+  toast(`Test email sent to ${r.to}. Check your inbox (and Spam).`);
+});
 $("test-reminder").onclick = () => showReminder({ task_id: 0, kind: "test", title: "Go to the gym" });
 
 // ---------- go ----------

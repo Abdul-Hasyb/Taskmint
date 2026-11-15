@@ -1,6 +1,6 @@
 from datetime import date, datetime, time, timezone  # tools for dates and times (date = just a day; time = just a clock time)
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Time, UniqueConstraint  # column types; ForeignKey = "points at another table"; UniqueConstraint = "no two rows with the same values"
+from sqlalchemy import Date, DateTime, ForeignKey, String, Time, UniqueConstraint, false  # column types; ForeignKey = "points at another table"; UniqueConstraint = "no two rows with the same values"
 from sqlalchemy.orm import Mapped, mapped_column  # tools for describing a table's columns
 
 from app.database import Base  # the parent class every table inherits from
@@ -18,6 +18,7 @@ class User(Base):  # one row in the "users" table = one account
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True)  # login email; unique = no two accounts with the same email
     password_hash: Mapped[str] = mapped_column(String(255))  # the SCRAMBLED password; the real one is never stored
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)  # when the account was made
+    email_reminders: Mapped[bool] = mapped_column(default=False, server_default=false())  # "email me reminders" switch; OFF unless I turn it on (server_default fills old rows)
 
 
 class Client(Base):  # one row in the "clients" table = one client (Bilal, Sara, a gym brand...)
@@ -68,3 +69,5 @@ class Reminder(Base):  # one row = one reminder to show for one task at one mome
     kind: Mapped[str] = mapped_column(String(20))  # before / at / after / morning / afternoon / evening
     send_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)  # when to show it (UTC)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # when it was handed to the browser, or None = not yet
+    emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # when the email job dealt with it, or None = not yet
+    email_sent: Mapped[bool] = mapped_column(default=False, server_default=false())  # True = an email really went out (counts toward the daily cap)

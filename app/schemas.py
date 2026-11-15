@@ -131,6 +131,7 @@ class UserRead(BaseModel):  # what the API SENDS BACK about a user (never the pa
     id: int  # the user's number
     email: str  # their email
     created_at: datetime  # when they registered
+    email_reminders: bool = False  # the "email me reminders" switch
 
 
 class Token(BaseModel):  # what /auth/login SENDS BACK
@@ -155,3 +156,8 @@ class SnoozeRequest(BaseModel):  # what POST /reminders/snooze RECEIVES
     model_config = STRICT  # no unknown fields
     task_id: int  # which task
     minutes: int = Field(default=10, ge=5, le=240)  # remind again in 5 minutes to 4 hours (no spam, no forever)
+
+
+class UserSettings(BaseModel):  # what PATCH /auth/me RECEIVES
+    model_config = STRICT  # no unknown fields (nobody can sneak in "email" or "password_hash")
+    email_reminders: bool  # turn reminder emails on or off
