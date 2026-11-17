@@ -1,6 +1,9 @@
-from datetime import datetime  # moments in time
+import html  # make text safe to put inside an email
+import logging  # notes for the server log
+import secrets  # truly random numbers (for reset codes)
+from datetime import datetime, timedelta  # moments in time, and gaps between them
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status  # APIRouter = a group of related endpoints; Request = who is calling
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status  # APIRouter = a group of related endpoints; Request = who is calling; BackgroundTasks = work done after the reply
 from fastapi.responses import RedirectResponse  # send the browser to another page
 from fastapi.security import OAuth2PasswordRequestForm  # the standard login form: username + password
 from sqlalchemy import select  # builds SELECT queries
@@ -8,13 +11,18 @@ from sqlalchemy.exc import IntegrityError  # raised when the database refuses a 
 from sqlalchemy.orm import Session  # the type of a database conversation
 
 from app.database import get_db  # hands each request its own database session
-from app.guard import client_ip, limit  # rate limits
+from app.guard import client_ip, limit, limiter  # rate limits
 from app.models import User  # the users TABLE
 from app import clock, mailer  # "now" (one clock the tests can freeze) and reminder emails (Brevo)
-from app.schemas import Token, UserCreate, UserRead, UserSettings  # the forms
+from app.routers.reminders import as_utc  # SQLite (tests) forgets time zones; this puts UTC back
+from app.schemas import ForgotPassword, ResetPassword, Token, UserCreate, UserRead, UserSettings  # the forms
 from app.security import DUMMY_HASH, create_access_token, create_purpose_token, get_current_user, hash_password, read_purpose_token, verify_password  # login tools
 
 router = APIRouter(prefix="/auth", tags=["auth"])  # every endpoint here starts with /auth
+logger = logging.getLogger("taskmint.auth")  # our notes show up as "taskmint.auth" in the log
+
+RESET_MINUTES = 15  # a reset code works for 15 minutes
+RESET_TRIES = 5  # 5 wrong codes and it's thrown away (guessing 1 in a million, 5 times, is hopeless)
 
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)  # POST /auth/register makes an account
@@ -109,3 +117,66 @@ def verify_email(token: str, db: Session = Depends(get_db)) -> RedirectResponse:
     user.email_verified = True
     db.commit()
     return RedirectResponse("/?verified=1", status_code=303)  # back to Taskmint, which shows "Email verified ✅"
+
+
+# ---------------------------------------------------------------- forgot password
+
+def reset_email(code: str) -> tuple[str, str]:  # (HTML, plain text) of the email with the code
+    code = html.escape(code)  # it's only digits, but escape anyway: nothing unchecked goes into HTML
+    return (f"<div style='font-family:Segoe UI,Arial,sans-serif;background:#0c1311;padding:28px'>"
+        f"<div style='max-width:440px;margin:auto;background:#141f1b;border:1px solid #2c8a63;border-radius:16px;padding:26px;color:#e9f2ee'>"
+        f"<div style='font-size:22px;font-weight:700'>Task<span style='color:#3ddc97'>mint</span></div>"
+        f"<p>Your code to reset your password:</p>"
+        f"<div style='font-size:34px;font-weight:700;letter-spacing:8px;color:#3ddc97;background:#0c1311;border-radius:12px;padding:14px;text-align:center'>{code}</div>"
+        f"<p style='color:#9fb3ab;font-size:13px'>It works for {RESET_MINUTES} minutes. Never share it: Taskmint will never ask you for it.<br>"
+        f"Didn't ask for this? Ignore this email. Your password stays the same.</p></div></div>",
+        f"Your Taskmint password reset code: {code}\nIt works for {RESET_MINUTES} minutes. Didn't ask for this? Ignore this email; your password stays the same.")
+
+
+@router.post("/forgot-password")  # POST /auth/forgot-password: email me a 6-digit code
+def forgot_password(body: ForgotPassword, request: Request, background: BackgroundTasks, db: Session = Depends(get_db)) -> dict[str, str]:
+    email = body.email.lower()
+    limit(f"forgot-ip:{client_ip(request)}", 5, 3600, "Too many reset requests from this network. Try again later.")  # no mail-bombing from one place
+    limit(f"forgot-email:{email}", 3, 3600, "We've already sent 3 codes to this email this hour. Check your inbox and Spam, or try again later.")  # no mail-bombing one person
+    if not mailer.enabled():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Email isn't set up on the server yet, so we can't send a code.")
+    code = f"{secrets.randbelow(1_000_000):06d}"  # 000000 to 999999, truly random
+    scrambled = hash_password(code)  # done for EVERY request, so a real and a fake email take the same time
+    user = db.scalar(select(User).where(User.email == email))
+    if user is not None:  # only real accounts get a code...
+        user.reset_code_hash = scrambled  # a new code replaces any older one
+        user.reset_expires_at = clock.utc_now() + timedelta(minutes=RESET_MINUTES)
+        user.reset_attempts = 0
+        db.commit()
+        html_body, text_body = reset_email(code)
+        background.add_task(mailer.brevo_send, user.email, "🔑 Your Taskmint password reset code", html_body, text_body)  # sent AFTER replying, so the reply time gives nothing away (code NOT in the subject: phone lock screens show subjects)
+    # ...but the reply is the same either way, so nobody can use this to find out who has an account
+    return {"status": "sent", "detail": "If that email has a Taskmint account, we've sent it a 6-digit code. Check your inbox and Spam."}
+
+
+@router.post("/reset-password")  # POST /auth/reset-password: code + new password
+def reset_password(body: ResetPassword, request: Request, db: Session = Depends(get_db)) -> dict[str, str]:
+    email = body.email.lower()
+    limit(f"reset-ip:{client_ip(request)}", 10, 900, "Too many tries. Wait 15 minutes and try again.")
+    wrong = HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That code is wrong or has expired. Check the email, or ask for a new code.")
+    user = db.scalar(select(User).where(User.email == email))
+    if user is None or not user.reset_code_hash or as_utc(user.reset_expires_at) < clock.utc_now():  # no account, no code, or too late
+        verify_password(body.code, DUMMY_HASH)  # same time as a real check
+        raise wrong
+    if not verify_password(body.code, user.reset_code_hash):  # wrong code
+        user.reset_attempts += 1
+        if user.reset_attempts >= RESET_TRIES:  # 5 wrong: this code is dead, ask for a new one
+            user.reset_code_hash = user.reset_expires_at = None
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Too many wrong codes. Ask for a new code.")
+        db.commit()
+        raise wrong
+    user.password_hash = hash_password(body.password)  # the new password (scrambled)
+    user.reset_code_hash = user.reset_expires_at = None  # a code works only ONCE
+    user.reset_attempts = 0
+    user.email_verified = True  # the code reached their inbox, so the email is really theirs
+    db.commit()
+    limiter.clear(f"login-email:{email}")  # if they got locked out by wrong passwords, let them log in now...
+    limiter.clear(f"login-ip:{client_ip(request)}")  # ...from this network too (only the real owner can get here: it needed the emailed code)
+    logger.info("Password reset for user %s", user.id)  # the id only, never the email or password
+    return {"status": "changed", "detail": "Password changed. Log in with your new password."}

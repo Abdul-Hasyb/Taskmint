@@ -20,6 +20,9 @@ class User(Base):  # one row in the "users" table = one account
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)  # when the account was made
     email_verified: Mapped[bool] = mapped_column(default=False, server_default=false())  # True once they clicked the link we emailed (proves the address is theirs)
     email_reminders: Mapped[bool] = mapped_column(default=False, server_default=false())  # "email me reminders" switch; OFF unless I turn it on (server_default fills old rows)
+    reset_code_hash: Mapped[str | None] = mapped_column(String(255), default=None)  # "forgot password" code, SCRAMBLED like a password (None = no reset going on)
+    reset_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)  # the code stops working after this (15 minutes)
+    reset_attempts: Mapped[int] = mapped_column(default=0, server_default="0")  # wrong guesses so far; 5 wrong = the code is thrown away
 
 
 class Client(Base):  # one row in the "clients" table = one client (Bilal, Sara, a gym brand...)

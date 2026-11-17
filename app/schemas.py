@@ -128,6 +128,16 @@ COMMON_PASSWORDS = {  # the passwords attackers try first (a short list; a real 
 }
 
 
+def check_password(email: str, password: str) -> None:  # one set of password rules for sign-up AND "forgot password"
+    pw = password.lower()
+    if pw in COMMON_PASSWORDS:  # on every "most common passwords" list
+        raise ValueError("That password is too common. Pick something harder to guess.")
+    if len(set(pw)) <= 2:  # "aaaaaaaa", "abababab"
+        raise ValueError("That password is too simple. Mix different letters and numbers.")
+    if email.split("@")[0].lower() in pw:  # contains the email's name ("ali123" for ali@...)
+        raise ValueError("Your password shouldn't contain your email name.")
+
+
 class UserCreate(BaseModel):  # what someone SENDS to register
     model_config = STRICT  # reject unknown fields; trim spaces
 
@@ -136,13 +146,24 @@ class UserCreate(BaseModel):  # what someone SENDS to register
 
     @model_validator(mode="after")  # runs after email and password are checked
     def not_a_weak_password(self) -> "UserCreate":  # refuse passwords attackers try first
-        pw = self.password.lower()
-        if pw in COMMON_PASSWORDS:  # on every "most common passwords" list
-            raise ValueError("That password is too common. Pick something harder to guess.")
-        if len(set(pw)) <= 2:  # "aaaaaaaa", "abababab"
-            raise ValueError("That password is too simple. Mix different letters and numbers.")
-        if self.email.split("@")[0].lower() in pw:  # contains the email's name ("ali123" for ali@...)
-            raise ValueError("Your password shouldn't contain your email name.")
+        check_password(self.email, self.password)
+        return self
+
+
+class ForgotPassword(BaseModel):  # "email me a reset code"
+    model_config = STRICT
+    email: EmailStr
+
+
+class ResetPassword(BaseModel):  # the code from the email + the new password
+    model_config = STRICT
+    email: EmailStr
+    code: str = Field(pattern=r"^\d{6}$")  # exactly 6 digits
+    password: str = Field(min_length=8, max_length=128)  # same limits as sign-up
+
+    @model_validator(mode="after")
+    def not_a_weak_password(self) -> "ResetPassword":  # the same rules as sign-up
+        check_password(self.email, self.password)
         return self
 
 

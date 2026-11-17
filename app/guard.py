@@ -42,6 +42,10 @@ class RateLimiter:  # "at most N times per M seconds" for any key (an IP, an ema
                     del self.hits[old]
             return True
 
+    def clear(self, key: str) -> None:  # forget ONE key (e.g. unlock an account's logins after a password reset)
+        with self.lock:
+            self.hits.pop(key, None)
+
     def reset(self) -> None:  # tests start with a clean slate
         with self.lock:
             self.hits.clear()
