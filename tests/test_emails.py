@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient  # the fake browser type
 
 from app import clock, mailer  # the clock we freeze and the email code we test
 from app.database import SessionLocal  # to run one round of the email job
+from app.models import User  # to mark an email as verified in the test database
 
 PKT = clock.LOCAL_TZ  # Pakistan time
 
@@ -26,6 +27,14 @@ def outbox(monkeypatch: pytest.MonkeyPatch):  # a fake Brevo: emails land in thi
     return {"sent": sent, "run_at": run_at, "state": state}
 
 
+def switch_on(browser: TestClient) -> None:  # verify this account's email (like clicking the link), then turn emails on
+    email = browser.get("/auth/me").json()["email"]
+    with SessionLocal() as db:
+        db.query(User).filter(User.email == email).update({"email_verified": True})
+        db.commit()
+    assert browser.patch("/auth/me", json={"email_reminders": True}).json()["email_reminders"] is True
+
+
 def gym_at_8(client: TestClient) -> int:
     return client.post("/tasks", json={"title": "Gym", "due_date": "2026-11-16", "due_time": "20:00"}).json()["id"]
 
@@ -38,7 +47,7 @@ def test_switch_is_off_by_default(client: TestClient, outbox) -> None:
 
 
 def test_email_goes_to_my_own_address(client: TestClient, outbox) -> None:
-    assert client.patch("/auth/me", json={"email_reminders": True}).json()["email_reminders"] is True  # switch it on
+    switch_on(client)  # verified + switched on
     gym_at_8(client)
     assert outbox["run_at"](19, 1) == 1
     assert outbox["sent"][0]["to"] == "ayesha@example.com"  # only ever the account's own email
@@ -47,7 +56,7 @@ def test_email_goes_to_my_own_address(client: TestClient, outbox) -> None:
 
 
 def test_one_email_per_task_and_none_when_done(client: TestClient, outbox) -> None:
-    client.patch("/auth/me", json={"email_reminders": True})
+    switch_on(client)
     task_id = gym_at_8(client)
     outbox["run_at"](20, 1)  # server was off at 7: both "in 1 hour" and "now" are due
     assert [e["subject"] for e in outbox["sent"]] == ["🔔 Gym is now (8:00 PM)"]  # only the newest
@@ -57,7 +66,7 @@ def test_one_email_per_task_and_none_when_done(client: TestClient, outbox) -> No
 
 
 def test_titles_are_escaped_in_the_email(client: TestClient, outbox) -> None:
-    client.patch("/auth/me", json={"email_reminders": True})
+    switch_on(client)
     client.post("/tasks", json={"title": "<script>alert(1)</script>", "due_date": "2026-11-16", "due_time": "20:00"})
     outbox["run_at"](19, 1)
     assert "<script>" not in outbox["sent"][0]["html"]  # HTML in a title can't run inside the email
@@ -65,7 +74,7 @@ def test_titles_are_escaped_in_the_email(client: TestClient, outbox) -> None:
 
 
 def test_failed_send_is_retried(client: TestClient, outbox) -> None:
-    client.patch("/auth/me", json={"email_reminders": True})
+    switch_on(client)
     gym_at_8(client)
     outbox["state"]["fail"] = True
     assert outbox["run_at"](19, 1) == 0  # Brevo down
@@ -75,7 +84,7 @@ def test_failed_send_is_retried(client: TestClient, outbox) -> None:
 
 def test_daily_cap(client: TestClient, outbox, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mailer, "DAILY_CAP", 2)
-    client.patch("/auth/me", json={"email_reminders": True})
+    switch_on(client)
     for title in ["A", "B", "C"]:
         client.post("/tasks", json={"title": title, "due_date": "2026-11-16", "due_time": "20:00"})
     outbox["run_at"](19, 1)
@@ -83,7 +92,7 @@ def test_daily_cap(client: TestClient, outbox, monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_other_users_switch_is_theirs(client: TestClient, other_user: TestClient, outbox) -> None:
-    other_user.patch("/auth/me", json={"email_reminders": True})  # Omar turns emails ON...
+    switch_on(other_user)  # Omar turns emails ON...
     gym_at_8(client)  # ...but this is Ayesha's task, and her switch is off
     outbox["run_at"](19, 1)
     assert outbox["sent"] == []
@@ -102,3 +111,47 @@ def test_test_email_needs_setup(client: TestClient, monkeypatch: pytest.MonkeyPa
 def test_settings_need_login(anon: TestClient) -> None:
     assert anon.patch("/auth/me", json={"email_reminders": True}).status_code == 401
     assert anon.post("/auth/me/test-email").status_code == 401
+
+
+# ---------------------------------------------------------------- email verification (security audit)
+
+def test_cannot_switch_emails_on_before_verifying(client: TestClient) -> None:  # no spamming an address you don't own
+    response = client.patch("/auth/me", json={"email_reminders": True})
+    assert response.status_code == 403 and "Verify your email" in response.json()["detail"]
+
+
+def test_no_emails_to_unverified_address_even_if_switched_on(client: TestClient, outbox) -> None:
+    switch_on(client)
+    with SessionLocal() as db:  # pretend the switch got turned on some other way, but the address isn't confirmed
+        db.query(User).update({"email_verified": False})
+        db.commit()
+    gym_at_8(client)
+    outbox["run_at"](19, 1)
+    assert outbox["sent"] == []  # the job checks verification too
+
+
+def test_verification_link(client: TestClient) -> None:
+    from app.security import create_purpose_token
+    me = client.get("/auth/me").json()
+    token = create_purpose_token(me["id"], me["email"], "verify", 60)  # the token our email would contain
+    response = client.get(f"/auth/verify?token={token}", follow_redirects=False)
+    assert response.status_code == 303 and response.headers["location"] == "/?verified=1"
+    assert client.get("/auth/me").json()["email_verified"] is True
+
+
+def test_bad_verification_links(client: TestClient) -> None:
+    from app.security import create_access_token, create_purpose_token
+    me = client.get("/auth/me").json()
+    for token in ["nonsense", create_access_token(me["id"]),  # a login token is not a verify token
+                  create_purpose_token(me["id"], "old@example.com", "verify", 60),  # made for another email
+                  create_purpose_token(me["id"], me["email"], "reset", 60),  # made for another job
+                  create_purpose_token(me["id"], me["email"], "verify", -1)]:  # expired
+        assert client.get(f"/auth/verify?token={token}", follow_redirects=False).headers["location"] == "/?verified=0"
+    assert client.get("/auth/me").json()["email_verified"] is False
+
+
+def test_email_link_token_cannot_log_in(client: TestClient, anon: TestClient) -> None:
+    from app.security import create_purpose_token
+    me = client.get("/auth/me").json()
+    token = create_purpose_token(me["id"], me["email"], "verify", 60)
+    assert anon.get("/auth/me", headers={"Authorization": f"Bearer {token}"}).status_code == 401  # a stolen email link is NOT a login

@@ -18,6 +18,7 @@ class User(Base):  # one row in the "users" table = one account
     email: Mapped[str] = mapped_column(String(254), unique=True, index=True)  # login email; unique = no two accounts with the same email
     password_hash: Mapped[str] = mapped_column(String(255))  # the SCRAMBLED password; the real one is never stored
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)  # when the account was made
+    email_verified: Mapped[bool] = mapped_column(default=False, server_default=false())  # True once they clicked the link we emailed (proves the address is theirs)
     email_reminders: Mapped[bool] = mapped_column(default=False, server_default=false())  # "email me reminders" switch; OFF unless I turn it on (server_default fills old rows)
 
 

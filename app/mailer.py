@@ -79,7 +79,7 @@ def send_due_emails(db: Session, send=brevo_send) -> int:  # one round of the em
     now = clock.utc_now()
     rows = db.execute(  # due reminders not yet emailed, for people who switched emails on
         select(Reminder, Task, User).join(Task, Task.id == Reminder.task_id).join(User, User.id == Reminder.user_id)
-        .where(Reminder.emailed_at.is_(None), Reminder.send_at <= now, User.email_reminders.is_(True))
+        .where(Reminder.emailed_at.is_(None), Reminder.send_at <= now, User.email_reminders.is_(True), User.email_verified.is_(True))  # switch on AND address confirmed
         .order_by(Reminder.send_at).limit(500)
     ).all()
     newest: dict[int, tuple[Reminder, Task, User]] = {}  # one email per task: the newest due reminder

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session  # the type of a database conversation
 
 from app import clock  # "now" and Pakistan time (used as clock.x so tests can freeze time)
 from app.database import get_db  # hands each request its own database session
+from app.guard import limit  # rate limits
 from app.models import Reminder, Task, User  # the reminders, tasks and users TABLES
 from app.schemas import ReminderOut, ReminderUpcoming, SnoozeRequest  # what we send back / receive
 from app.security import get_current_user  # "who is logged in?" (401 if nobody)
@@ -91,6 +92,7 @@ def due_reminders(db: Session = Depends(get_db), user: User = Depends(get_curren
 
 @router.post("/snooze", status_code=status.HTTP_201_CREATED)  # POST /reminders/snooze: remind me again in N minutes
 def snooze(request: SnoozeRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> ReminderUpcoming:
+    limit(f"snooze:{user.id}", 60, 3600)  # 60 snoozes an hour is plenty
     task = db.scalar(select(Task).where(Task.id == request.task_id, Task.user_id == user.id))  # must be MY task
     if task is None:  # not mine, or doesn't exist
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")

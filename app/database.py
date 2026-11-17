@@ -10,6 +10,8 @@ load_dotenv()  # read .env, so os.getenv can see DATABASE_URL
 DATABASE_URL = os.getenv("DATABASE_URL")  # the database address + password, from .env (never written in code)
 if not DATABASE_URL:  # .env missing or the line is empty?
     raise RuntimeError("DATABASE_URL is not set. Add it to your .env file.")  # stop with a clear message
+if DATABASE_URL.startswith(("postgresql://", "postgres://")):  # Supabase's copy button gives "postgresql://..."
+    DATABASE_URL = "postgresql+psycopg://" + DATABASE_URL.split("://", 1)[1]  # tell SQLAlchemy to use psycopg 3 (the driver we installed)
 
 if DATABASE_URL.startswith("sqlite"):  # the tests use a tiny throwaway SQLite database in memory
     engine = create_engine(  # SQLite needs two special settings to work with FastAPI and tests

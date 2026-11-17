@@ -597,6 +597,8 @@
         </div>
         <label class="switch-row"><input type="checkbox" id="sound-on" checked> Play a sound</label>
         <h2 style="margin:22px 0 4px">📧 Email reminders</h2>
+        <p id="verify-status" class="muted" style="margin:6px 0"></p>  <!-- "✅ Verified" or "Not verified yet" -->
+        <button class="btn" id="verify-btn">Send verification email</button>
         <label class="switch-row"><input type="checkbox" id="email-on"> Email me reminders at&nbsp;<b id="email-addr"></b></label>
         <p class="muted" style="margin:0 0 10px">The same reminders, in your inbox, even when Taskmint isn't open. At most 20 a day. The first one may land in Spam: mark it "Not spam".</p>
         <button class="btn ghost" id="test-email">Send a test email</button>
@@ -797,6 +799,7 @@ async function start() {
   const me = await api("/auth/me");  // also checks the token still works
   email = me.email;
   $("email-on").checked = me.email_reminders;  // the "email me reminders" switch
+  drawVerified(me.email_verified);
   $("email-addr").textContent = me.email;
   $("auth-view").classList.add("hidden");
   $("app-view").classList.remove("hidden");
@@ -1486,6 +1489,38 @@ $("notify-btn").onclick = askNotify;
 $("bell-on").onclick = askNotify;
 $("bell-later").onclick = () => { store("taskmint_bell_later", "1"); drawNotifyStatus(); };
 $("sound-on").onchange = () => store("taskmint_sound", $("sound-on").checked ? "on" : "off");
+function drawVerified(ok) {  // verified or not: what Settings shows
+  $("verify-status").textContent = ok ? "✅ Your email is verified." : "⚠️ Not verified yet. Verify it to get email reminders and 20 AI requests a day (3 until then).";
+  $("verify-btn").classList.toggle("hidden", ok);
+  $("email-on").disabled = !ok; $("test-email").disabled = !ok;  // both need a confirmed address
+}
+$("verify-btn").onclick = (e) => run(e.target, async () => {
+  const r = await api("/auth/me/send-verification", { method: "POST" });
+  toast(r.status === "sent" ? `Verification email sent to ${r.to}. Click the link inside (check Spam too).` : "Your email is already verified ✅");
+});
+let tabs = null;  // a "radio" between Taskmint tabs in this browser (same site only)
+try { tabs = new BroadcastChannel("taskmint"); } catch {}
+if (tabs) tabs.onmessage = (event) => {  // another Taskmint tab says: "the email is verified!"
+  if (event.data !== "verified" || !token) return;  // only matters in a logged-in tab
+  run(null, async () => {
+    const me = await api("/auth/me");
+    drawVerified(me.email_verified);  // Settings now says ✅
+    await refreshUsage();  // 3 → 20 AI requests
+    toast("Email verified ✅ You now get email reminders and 20 AI requests a day.");
+  });
+};
+(() => {  // back from the email link? (?verified=1 or ?verified=0)
+  const flag = new URLSearchParams(location.search).get("verified");
+  if (flag === null) return;
+  history.replaceState(null, "", "/");  // tidy the address bar
+  if (flag === "1" && tabs) tabs.postMessage("verified");  // tell the Taskmint tab that's already open
+  if (flag === "1" && !token) {  // this is a NEW tab with no login: show a clear message instead of a bare login page
+    $("auth-title").replaceChildren("Email verified ✅");
+    $("auth-sub").textContent = "All set! You can close this tab and go back to Taskmint. Or log in below to continue here.";
+    return;
+  }
+  setTimeout(() => toast(flag === "1" ? "Email verified ✅ You now get email reminders and 20 AI requests a day." : "That link didn't work or has expired. Send a new one from Settings.", flag !== "1"), 600);
+})();
 $("email-on").onchange = () => run($("email-on"), async () => {  // flip the email switch on the server
   const me = await api("/auth/me", { method: "PATCH", json: { email_reminders: $("email-on").checked } });
   $("email-on").checked = me.email_reminders;

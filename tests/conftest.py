@@ -7,6 +7,7 @@ import pytest  # the testing tool  # noqa: E402 (imports after the lines above o
 from fastapi.testclient import TestClient  # sends fake requests to our app, no server needed  # noqa: E402
 
 from app.database import Base, engine  # the test database connection and table definitions  # noqa: E402
+from app.guard import limiter  # the rate limiter (reset before each test)
 from app.main import app  # our app  # noqa: E402
 
 PASSWORD = "correct-horse-battery"  # the password every test user gets
@@ -15,6 +16,7 @@ PASSWORD = "correct-horse-battery"  # the password every test user gets
 @pytest.fixture(autouse=True)  # runs automatically before EVERY test
 def fresh_database():  # give each test a clean, empty database
     Base.metadata.create_all(engine)  # create the tables
+    limiter.reset()  # every test starts with clean rate limits
     yield  # the test runs here
     Base.metadata.drop_all(engine)  # delete the tables afterwards, so the next test starts empty
 

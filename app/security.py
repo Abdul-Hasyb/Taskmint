@@ -43,11 +43,28 @@ def create_access_token(user_id: int) -> str:  # make a signed login token for t
     return jwt.encode({"sub": str(user_id), "exp": expires}, JWT_SECRET, algorithm=ALGORITHM)  # sub = which user; exp = expiry
 
 
+def create_purpose_token(user_id: int, email: str, purpose: str, minutes: int) -> str:  # a one-job token (e.g. "verify" this email), NOT a login
+    expires = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    return jwt.encode({"sub": str(user_id), "em": email, "pur": purpose, "exp": expires}, JWT_SECRET, algorithm=ALGORITHM)  # pur = what it's for
+
+
+def read_purpose_token(token: str, purpose: str) -> tuple[int, str] | None:  # (user id, email) if the token is valid for THIS job, else None
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])  # signature + expiry
+        if payload.get("pur") != purpose:  # a login token, or a token for another job
+            return None
+        return int(payload["sub"]), str(payload["em"])
+    except (jwt.InvalidTokenError, KeyError, ValueError):
+        return None
+
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:  # every protected endpoint uses this
     try:  # the token might be fake, edited or expired
         payload = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])  # checks the signature AND the expiry
         user_id = int(payload["sub"])  # which user it belongs to
-    except (jwt.InvalidTokenError, KeyError, ValueError):  # bad signature, expired, or missing/odd "sub"
+        if "pur" in payload:  # a one-job token (like an email link) can never be used to log in
+            raise ValueError("not a login token")
+    except (jwt.InvalidTokenError, KeyError, ValueError):  # bad signature, expired, missing/odd "sub", or wrong kind of token
         raise UNAUTHORIZED  # 401
     user = db.get(User, user_id)  # does that user still exist?
     if user is None:  # deleted, or never existed

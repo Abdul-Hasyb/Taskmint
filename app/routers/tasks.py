@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status  # APIRouter = a group of related endpoints; Query = settings for ?filters
-from sqlalchemy import select  # builds SELECT queries
+from sqlalchemy import func, select  # builds SELECT queries; func.count = counting rows
 from sqlalchemy.orm import Session  # the type of a database conversation
 
+from app.guard import MAX_ID, PathId  # ids must be 1..2147483647 (bigger ones crashed the database)
 from app.database import get_db  # hands each request its own database session
 from app.models import Client, Task, User, utc_now  # the tasks, clients and users TABLES; utc_now = the time right now
 from app.routers.reminders import delete_reminders, plan_reminders  # the 3-reminders rules
@@ -25,8 +26,18 @@ def check_client_exists(db: Session, client_id: int | None, user: User) -> None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Client {client_id} does not exist")  # reject
 
 
+MAX_TASKS = 2000  # tasks per account, at most (stops one account filling the database)
+
+
+def check_task_room(db: Session, user: User, adding: int = 1) -> None:  # is there room for more tasks?
+    count = db.scalar(select(func.count()).select_from(Task).where(Task.user_id == user.id)) or 0
+    if count + adding > MAX_TASKS:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"You've reached the limit of {MAX_TASKS} tasks. Delete some old ones first.")
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)  # POST /tasks creates a task; success = 201 Created
 def create_task(task_in: TaskCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> TaskRead:  # login required
+    check_task_room(db, user)  # not over the limit
     check_client_exists(db, task_in.client_id, user)  # stop here if the client isn't theirs
     check_client_exists(db, task_in.assignee_id, user)  # same for the person doing it
     task = Task(**task_in.model_dump(), user_id=user.id)  # every field the user sent (title, due_date...), owned by this user
@@ -41,8 +52,8 @@ def create_task(task_in: TaskCreate, db: Session = Depends(get_db), user: User =
 @router.get("")  # GET /tasks lists THIS user's tasks; optional filters: /tasks?status=todo&client_id=3
 def list_tasks(
     status_filter: TaskStatus | None = Query(default=None, alias="status"),  # ?status=todo
-    client_id: int | None = None,  # ?client_id=3
-    assignee_id: int | None = None,  # ?assignee_id=4 = only tasks that person is doing
+    client_id: int | None = Query(default=None, ge=1, le=MAX_ID),  # ?client_id=3
+    assignee_id: int | None = Query(default=None, ge=1, le=MAX_ID),  # ?assignee_id=4 = only tasks that person is doing
     db: Session = Depends(get_db),  # the database session
     user: User = Depends(get_current_user),  # the logged-in user
 ) -> list[TaskRead]:  # returns a list of tasks
@@ -57,12 +68,12 @@ def list_tasks(
 
 
 @router.get("/{task_id}")  # GET /tasks/5 fetches task 5 (only if it's mine)
-def get_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> TaskRead:
+def get_task(task_id: PathId, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> TaskRead:
     return TaskRead.model_validate(find_task_or_404(db, task_id, user))  # find it (or 404) and send it back
 
 
 @router.patch("/{task_id}")  # PATCH /tasks/5 changes some fields of task 5 (only if it's mine)
-def update_task(task_id: int, changes: TaskUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> TaskRead:
+def update_task(task_id: PathId, changes: TaskUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> TaskRead:
     task = find_task_or_404(db, task_id, user)  # find it (or 404)
     updates = changes.model_dump(exclude_unset=True)  # only the fields the user actually sent
     if "client_id" in updates:  # moving the task to a client?
@@ -87,7 +98,7 @@ def update_task(task_id: int, changes: TaskUpdate, db: Session = Depends(get_db)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)  # DELETE /tasks/5 removes task 5 (only if it's mine)
-def delete_task(task_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> None:
+def delete_task(task_id: PathId, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> None:
     task = find_task_or_404(db, task_id, user)  # find it (or 404)
     delete_reminders(db, task.id)  # its reminders go first (they point at it)
     db.delete(task)  # mark it for deletion

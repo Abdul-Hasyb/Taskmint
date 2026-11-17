@@ -11,12 +11,17 @@ from app.clock import local_today  # today on the users' clock
 from app.database import get_db  # hands each request its own database session
 from app.models import AIUsage, Client, Task, User  # the AI-usage, clients, tasks and users TABLES
 from app.routers.reminders import plan_reminders  # the 3-reminders rules
-from app.routers.tasks import check_client_exists  # reuse: a task can only point at a real client
+from app.routers.tasks import check_client_exists, check_task_room  # reuse: a task can only point at a real client
 from app.schemas import ApproveRequest, PlanRequest, PlanResponse, ProposedTask, TaskRead  # the forms
 from app.security import get_current_user  # "who is logged in?" (401 if nobody)
 
 router = APIRouter(prefix="/planner", tags=["planner"])  # every endpoint here starts with /planner
 AI_DAILY_LIMIT = int(os.getenv("AI_DAILY_LIMIT", "20"))  # AI requests each user gets per day (default 20)
+AI_UNVERIFIED_LIMIT = int(os.getenv("AI_UNVERIFIED_LIMIT", "3"))  # until the email is verified: only a taste (fake accounts gain nothing)
+
+
+def ai_limit(user: User) -> int:  # this user's daily AI allowance
+    return AI_DAILY_LIMIT if user.email_verified else min(AI_DAILY_LIMIT, AI_UNVERIFIED_LIMIT)
 
 
 def today_usage(db: Session, user: User) -> AIUsage:  # get (or start) this user's counter for today
@@ -30,8 +35,10 @@ def today_usage(db: Session, user: User) -> AIUsage:  # get (or start) this user
 
 def use_ai_credit(db: Session, user: User) -> None:  # count one AI request, or refuse if the limit is reached
     usage = today_usage(db, user)  # today's counter
-    if usage.count >= AI_DAILY_LIMIT:  # already used them all?
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Daily AI limit reached ({AI_DAILY_LIMIT} per day). Try again tomorrow.")  # stop BEFORE calling Gemini
+    allowed = ai_limit(user)
+    if usage.count >= allowed:  # already used them all?
+        hint = "" if user.email_verified else " Verify your email to get more."
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=f"Daily AI limit reached ({allowed} per day). Try again tomorrow.{hint}")  # stop BEFORE calling Gemini
     usage.count += 1  # one more used
     db.commit()  # save NOW, so even a failed AI call still counts (no free retries for spammers)
 
@@ -39,7 +46,8 @@ def use_ai_credit(db: Session, user: User) -> None:  # count one AI request, or 
 @router.get("/usage")  # GET /planner/usage: how many AI requests I have left today
 def usage(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict[str, int]:  # login required
     used = today_usage(db, user).count  # how many I've used today (0 if none)
-    return {"used": used, "limit": AI_DAILY_LIMIT, "remaining": max(AI_DAILY_LIMIT - used, 0)}  # e.g. {"used": 3, "limit": 20, "remaining": 17}
+    allowed = ai_limit(user)
+    return {"used": used, "limit": allowed, "remaining": max(allowed - used, 0)}  # e.g. {"used": 3, "limit": 20, "remaining": 17}
 
 
 def parse_due(raw_date: str | None, raw_time: str | None) -> tuple[date | None, time | None]:  # turn the AI's text into a real day and time
@@ -96,6 +104,7 @@ def propose(request: PlanRequest, db: Session = Depends(get_db), user: User = De
 
 @router.post("/approve", status_code=status.HTTP_201_CREATED)  # POST /planner/approve: save the tasks the user chose
 def approve(request: ApproveRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> list[TaskRead]:  # login required
+    check_task_room(db, user, len(request.tasks))  # room for all of them?
     for task_in in request.tasks:  # check EVERY task first...
         check_client_exists(db, task_in.client_id, user)  # ...so one bad (or someone else's) client stops the whole batch
         check_client_exists(db, task_in.assignee_id, user)  # same for the person doing it
@@ -106,4 +115,4 @@ def approve(request: ApproveRequest, db: Session = Depends(get_db), user: User =
         db.refresh(task)  # ...to get its id and created_at
         plan_reminders(db, task)  # its 3 reminders
     db.commit()  # save the reminders
-    return [TaskRead.model_validate(task) for task in tasks]  # send them back
+    return [TaskRead.model_validate(task) for task in tasks]  # send them back

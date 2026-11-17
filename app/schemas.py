@@ -1,9 +1,10 @@
 from datetime import date, datetime, time  # date = a day, datetime = a moment, time = a clock time
-from typing import Literal  # lets us say "only these exact values are allowed"
+from typing import Annotated, Literal  # lets us say "only these exact values are allowed"
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator  # tools for describing and validating data; EmailStr checks emails
 
 TaskStatus = Literal["todo", "in_progress", "done"]  # the only statuses a task can have
+DbId = Annotated[int, Field(ge=1, le=2_147_483_647)]  # an id the database can hold (1 .. 2,147,483,647); anything else = 422, not a crash
 STRICT = ConfigDict(extra="forbid", str_strip_whitespace=True)  # shared safety rules: reject unknown fields, trim spaces
 
 
@@ -12,8 +13,8 @@ class TaskCreate(BaseModel):  # what the user must SEND to create a task
 
     title: str = Field(min_length=1, max_length=200)  # required; 1 to 200 characters
     description: str | None = Field(default=None, max_length=2000)  # optional; at most 2000 characters
-    client_id: int | None = None  # optional: who this task is FROM or about (e.g. the client who asked)
-    assignee_id: int | None = None  # optional: who DOES it (someone on my People list); None = me
+    client_id: DbId | None = None  # optional: who this task is FROM or about (e.g. the client who asked)
+    assignee_id: DbId | None = None  # optional: who DOES it (someone on my People list); None = me
     due_date: date | None = None  # optional: the day it's due, e.g. "2026-11-16"
     due_time: time | None = None  # optional: the time it's due, e.g. "20:00" (needs a due_date)
 
@@ -30,8 +31,8 @@ class TaskUpdate(BaseModel):  # what the user may SEND to change a task; every f
     title: str | None = Field(default=None, min_length=1, max_length=200)  # new title, if changing it
     description: str | None = Field(default=None, max_length=2000)  # new description, if changing it
     status: TaskStatus | None = None  # new status, if changing it
-    client_id: int | None = None  # move the task to another client, or null to remove the client
-    assignee_id: int | None = None  # give it to someone else, or null to take it back myself
+    client_id: DbId | None = None  # move the task to another client, or null to remove the client
+    assignee_id: DbId | None = None  # give it to someone else, or null to take it back myself
     due_date: date | None = None  # a new due day, or null to remove it (also removes the time)
     due_time: time | None = None  # a new due time, or null for "sometime that day"
 
@@ -100,8 +101,8 @@ class PlanRequest(BaseModel):  # what the user SENDS to the AI planner
 class ProposedTask(BaseModel):  # one task the AI suggests (NOT saved yet)
     title: str = Field(min_length=1, max_length=200)  # same limits as a real task
     description: str | None = Field(default=None, max_length=2000)  # same limits as a real task
-    client_id: int | None = None  # which client, or None
-    assignee_id: int | None = None  # who should do it, or None = me
+    client_id: DbId | None = None  # which client, or None
+    assignee_id: DbId | None = None  # who should do it, or None = me
     due_date: date | None = None  # the day the AI worked out ("kal" -> tomorrow), or None
     due_time: time | None = None  # the time the AI worked out ("8 baje" -> 20:00), or None
     source_quote: str  # the exact words from the message this task came from
@@ -118,11 +119,31 @@ class ApproveRequest(BaseModel):  # what the user SENDS to save the tasks they c
     tasks: list[TaskCreate] = Field(min_length=1, max_length=10)  # 1 to 10 tasks, each checked like a normal new task
 
 
+COMMON_PASSWORDS = {  # the passwords attackers try first (a short list; a real app would check a much bigger one)
+    "password", "password1", "password12", "password123", "password1234", "passw0rd", "12345678", "123456789", "1234567890",
+    "qwerty123", "qwertyuiop", "1q2w3e4r", "1qaz2wsx", "abc12345", "abcd1234", "iloveyou", "11111111", "00000000",
+    "12341234", "87654321", "welcome1", "welcome123", "letmein1", "admin123", "administrator", "sunshine1", "football1",
+    "baseball1", "princess1", "dragon123", "monkey123", "pakistan", "pakistan1", "pakistan123", "karachi123", "lahore123",
+    "taskmint", "taskmint1", "taskmint123", "computer", "internet", "starwars", "whatever", "trustno1",
+}
+
+
 class UserCreate(BaseModel):  # what someone SENDS to register
     model_config = STRICT  # reject unknown fields; trim spaces
 
     email: EmailStr  # must look like a real email address
     password: str = Field(min_length=8, max_length=128)  # at least 8 characters; capped so no one can send a 10 MB "password" to slow the server
+
+    @model_validator(mode="after")  # runs after email and password are checked
+    def not_a_weak_password(self) -> "UserCreate":  # refuse passwords attackers try first
+        pw = self.password.lower()
+        if pw in COMMON_PASSWORDS:  # on every "most common passwords" list
+            raise ValueError("That password is too common. Pick something harder to guess.")
+        if len(set(pw)) <= 2:  # "aaaaaaaa", "abababab"
+            raise ValueError("That password is too simple. Mix different letters and numbers.")
+        if self.email.split("@")[0].lower() in pw:  # contains the email's name ("ali123" for ali@...)
+            raise ValueError("Your password shouldn't contain your email name.")
+        return self
 
 
 class UserRead(BaseModel):  # what the API SENDS BACK about a user (never the password or its hash)
@@ -131,6 +152,7 @@ class UserRead(BaseModel):  # what the API SENDS BACK about a user (never the pa
     id: int  # the user's number
     email: str  # their email
     created_at: datetime  # when they registered
+    email_verified: bool = False  # did they click the verification link?
     email_reminders: bool = False  # the "email me reminders" switch
 
 
@@ -154,7 +176,7 @@ class ReminderUpcoming(BaseModel):  # a reminder still waiting (shown as 🔔 on
 
 class SnoozeRequest(BaseModel):  # what POST /reminders/snooze RECEIVES
     model_config = STRICT  # no unknown fields
-    task_id: int  # which task
+    task_id: DbId  # which task
     minutes: int = Field(default=10, ge=5, le=240)  # remind again in 5 minutes to 4 hours (no spam, no forever)
 
 
